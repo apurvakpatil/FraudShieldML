@@ -232,6 +232,44 @@ def train_and_evaluate_all(
     print(f"[Threshold Optimization] Optimal decision threshold on validation data: {optimal_threshold} (Default was 0.50)")
 
     # 8. Retrain Best Model on Complete Training Set (X_train, y_train) inside End-to-End Pipeline
+    # ---------------------------------------------------------------------
+    # Train Isolation Forest (unsupervised) on legitimate training data
+    # ---------------------------------------------------------------------
+    from src.isolation_forest import train_isolation_forest
+    iso_res = train_isolation_forest(
+        X_train=X_train,
+        y_train=y_train,
+        X_val=X_val,
+        y_val=y_val,
+        X_test=X_test,
+        y_test=y_test,
+        random_state=random_state,
+        contamination=0.01,
+        model_dir=model_dir,
+    )
+    # iso_res contains model, preprocessor, threshold, test_metrics, test_scores
+    iso_test_metrics = iso_res["test_metrics"]
+    iso_threshold = iso_res["threshold"]
+    iso_test_scores = iso_res["test_scores"]
+
+    # Append Isolation Forest metrics to comparison records (exactly once)
+    comparison_records.append({
+        "Model": "Isolation Forest",
+        "Accuracy": iso_test_metrics["accuracy"],
+        "Precision": iso_test_metrics["precision"],
+        "Recall": iso_test_metrics["recall"],
+        "F1-Score": iso_test_metrics["f1_score"],
+        "ROC-AUC": iso_test_metrics["roc_auc"],
+        "PR-AUC": iso_test_metrics["pr_auc"],
+        "Training Time (s)": iso_res["training_time"]
+    })
+
+    # Rebuild comparison_df to include Isolation Forest
+    comparison_df = pd.DataFrame(comparison_records).sort_values(by="F1-Score", ascending=False).reset_index(drop=True)
+
+    # ---------------------------------------------------------------------
+    # End of Isolation Forest integration
+    # ---------------------------------------------------------------------
     print(f"\n[Final Training] Retraining '{best_model_name}' on all {len(X_train):,} training records with full pipeline...")
     final_preprocessor = build_full_preprocessing_pipeline()
     
@@ -273,6 +311,10 @@ def train_and_evaluate_all(
             other_clf = fitted_val_models[other_name]
             if hasattr(other_clf, "predict_proba"):
                 test_models_probabilities[other_name] = other_clf.predict_proba(proc_test)[:, 1]
+
+    # Include Isolation Forest anomaly scores for ROC/PR comparison plots
+    # (higher score = more anomalous, consistent with roc_auc_score expectations)
+    test_models_probabilities["Isolation Forest"] = iso_test_scores
 
     # 10. Save Evaluation Artifacts and Plots
     test_metrics = save_evaluation_artifacts(

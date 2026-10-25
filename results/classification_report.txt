@@ -3,15 +3,15 @@
                 precision    recall  f1-score   support
 
 Legitimate (0)       1.00      1.00      1.00     19884
-Fraudulent (1)       0.78      0.63      0.70       116
+Fraudulent (1)       0.80      0.64      0.71       116
 
       accuracy                           1.00     20000
-     macro avg       0.89      0.81      0.85     20000
+     macro avg       0.90      0.82      0.85     20000
   weighted avg       1.00      1.00      1.00     20000
 
 
 Confusion Matrix Breakdown:
-True Positives (Frauds Caught): 73
-False Positives (Legitimate Flagged): 21
-False Negatives (Frauds Missed): 43
-True Negatives (Legitimate Cleared): 19863
+True Positives (Frauds Caught): 74
+False Positives (Legitimate Flagged): 19
+False Negatives (Frauds Missed): 42
+True Negatives (Legitimate Cleared): 19865

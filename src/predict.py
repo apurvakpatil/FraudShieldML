@@ -25,39 +25,90 @@ class FraudPredictor:
     and producing risk-scored transaction classifications.
     """
 
-    def __init__(self, model_path: Optional[str] = None, metadata_path: Optional[str] = None):
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        metadata_path: Optional[str] = None,
+        iso_model_path: Optional[str] = None,
+        iso_metadata_path: Optional[str] = None,
+    ):
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if model_path is None:
             model_path = os.path.join(base_dir, "models", "fraud_detection_model.joblib")
         if metadata_path is None:
             metadata_path = os.path.join(base_dir, "models", "model_metadata.json")
+        if iso_model_path is None:
+            iso_model_path = os.path.join(base_dir, "models", "isolation_forest_model.joblib")
+        if iso_metadata_path is None:
+            iso_metadata_path = os.path.join(base_dir, "models", "isolation_forest_metadata.json")
 
         self.model_path = model_path
         self.metadata_path = metadata_path
+        self.iso_model_path = iso_model_path
+        self.iso_metadata_path = iso_metadata_path
+
+        # Supervised Gradient Boosting attributes
         self.model = None
         self.metadata = {}
         self.threshold = 0.50
-        self.model_name = "Ensemble Model"
+        self.model_name = "Gradient Boosting"
+
+        # Unsupervised Isolation Forest attributes
+        self.iso_model = None
+        self.iso_preprocessor = None
+        self.iso_metadata = {}
+        self.iso_threshold = 0.0
+        self.iso_name = "Isolation Forest"
+
         self._load_model()
 
     def _load_model(self):
-        if not os.path.exists(self.model_path):
-            print(f"[FraudPredictor] Warning: Model file not found at {self.model_path}. Train model first.")
-            return
+        # 1. Load Supervised Gradient Boosting Model
+        if os.path.exists(self.model_path):
+            try:
+                print(f"[FraudPredictor] Loading supervised model from: {self.model_path}")
+                self.model = joblib.load(self.model_path)
+                if os.path.exists(self.metadata_path):
+                    with open(self.metadata_path, "r") as f:
+                        self.metadata = json.load(f)
+                        self.threshold = self.metadata.get("selected_threshold", 0.50)
+                        self.model_name = self.metadata.get("model_name", "Gradient Boosting")
+                print(f"[FraudPredictor] Successfully loaded '{self.model_name}' (threshold: {self.threshold})")
+            except Exception as e:
+                print(f"[FraudPredictor] Warning: Failed to load supervised model: {e}")
+                self.model = None
+        else:
+            print(f"[FraudPredictor] Notice: Supervised model file not found at {self.model_path}.")
 
-        print(f"[FraudPredictor] Loading model from: {self.model_path}")
-        self.model = joblib.load(self.model_path)
-
-        if os.path.exists(self.metadata_path):
-            with open(self.metadata_path, "r") as f:
-                self.metadata = json.load(f)
-                self.threshold = self.metadata.get("selected_threshold", 0.50)
-                self.model_name = self.metadata.get("model_name", "Ensemble Model")
-        print(f"[FraudPredictor] Successfully loaded '{self.model_name}' (threshold: {self.threshold})")
+        # 2. Load Unsupervised Isolation Forest Model
+        if os.path.exists(self.iso_model_path):
+            try:
+                print(f"[FraudPredictor] Loading Isolation Forest from: {self.iso_model_path}")
+                iso_artifact = joblib.load(self.iso_model_path)
+                if isinstance(iso_artifact, tuple) and len(iso_artifact) == 2:
+                    self.iso_preprocessor, self.iso_model = iso_artifact
+                else:
+                    self.iso_model = iso_artifact
+                if os.path.exists(self.iso_metadata_path):
+                    with open(self.iso_metadata_path, "r") as f:
+                        self.iso_metadata = json.load(f)
+                        self.iso_threshold = self.iso_metadata.get("selected_threshold", 0.0)
+                        self.iso_name = self.iso_metadata.get("model_name", "Isolation Forest")
+                print(f"[FraudPredictor] Successfully loaded '{self.iso_name}' (threshold: {self.iso_threshold})")
+            except Exception as e:
+                print(f"[FraudPredictor] Warning: Failed to load Isolation Forest model: {e}")
+                self.iso_model = None
+                self.iso_preprocessor = None
+        else:
+            print(f"[FraudPredictor] Notice: Isolation Forest model file not found at {self.iso_model_path}.")
 
     @property
     def is_loaded(self) -> bool:
         return self.model is not None
+
+    @property
+    def is_iso_loaded(self) -> bool:
+        return self.iso_model is not None and self.iso_preprocessor is not None
 
     def validate_features(self, data: Dict[str, Any]) -> tuple:
         """
@@ -121,30 +172,32 @@ class FraudPredictor:
 
         return True, cleaned, ""
 
-    def predict(self, feature_data: Dict[str, Any], custom_threshold: Optional[float] = None) -> Dict[str, Any]:
-        """
-        Executes prediction on input features dictionary.
-        Returns comprehensive dictionary with class, label, probability, risk level, and explanation.
-        """
-        if not self.is_loaded:
-            raise RuntimeError("Model is not loaded. Please train the model using `python -m src.train_model` first.")
+    def _extract_risk_factors(self, cleaned_data: Dict[str, Any]) -> List[str]:
+        """Generates domain-rule risk indicators based on transaction features."""
+        risk_factors = []
+        if cleaned_data["amt"] > 400.0:
+            risk_factors.append(f"High transaction amount (${cleaned_data['amt']:.2f})")
+        if cleaned_data["hour"] in [22, 23, 0, 1, 2, 3]:
+            risk_factors.append(f"Off-peak night hour ({cleaned_data['hour']}:00)")
+        if cleaned_data["category"] in ["shopping_net", "grocery_pos", "misc_net"]:
+            risk_factors.append(f"Elevated risk merchant category '{cleaned_data['category']}'")
+        if cleaned_data["distance_km"] > 150.0:
+            risk_factors.append(f"Unusual distance from cardholder location ({cleaned_data['distance_km']:.1f} km)")
+        return risk_factors
 
-        valid, cleaned_data, err_msg = self.validate_features(feature_data)
-        if not valid:
-            raise ValueError(err_msg)
+    def _predict_supervised(self, cleaned_data: Dict[str, Any], custom_threshold: Optional[float] = None) -> Dict[str, Any]:
+        """Executes inference using the supervised Gradient Boosting pipeline."""
+        if not self.is_loaded:
+            raise RuntimeError("Fraud detection model is not loaded. Please train the model using `python -m src.train_model` first.")
 
         threshold = custom_threshold if custom_threshold is not None else self.threshold
-
-        # Format input as a 1-row DataFrame
         df_input = pd.DataFrame([cleaned_data])
 
-        # Get probability
         if hasattr(self.model, "predict_proba"):
             probs = self.model.predict_proba(df_input)[0]
             fraud_prob = float(probs[1])
         elif hasattr(self.model, "decision_function"):
             dfunc = float(self.model.decision_function(df_input)[0])
-            # Sigmoid approximation
             fraud_prob = float(1.0 / (1.0 + (2.71828 ** (-dfunc))))
         else:
             pred = int(self.model.predict(df_input)[0])
@@ -152,7 +205,6 @@ class FraudPredictor:
 
         is_fraud = int(fraud_prob >= threshold)
 
-        # Risk level categorization
         if fraud_prob >= 0.75:
             risk_level = "Critical Risk"
         elif fraud_prob >= threshold:
@@ -163,26 +215,16 @@ class FraudPredictor:
             risk_level = "Low Risk"
 
         label = "Fraudulent Transaction" if is_fraud == 1 else "Legitimate Transaction"
-
-        # Generate rule/domain-based explanatory indicators
-        risk_factors = []
-        if cleaned_data["amt"] > 400.0:
-            risk_factors.append(f"High transaction amount (${cleaned_data['amt']:.2f})")
-        if cleaned_data["hour"] in [22, 23, 0, 1, 2, 3]:
-            risk_factors.append(f"Off-peak night hour ({cleaned_data['hour']}:00)")
-        if cleaned_data["category"] in ["shopping_net", "grocery_pos", "misc_net"]:
-            risk_factors.append(f"Elevated risk merchant category '{cleaned_data['category']}'")
-        if cleaned_data["distance_km"] > 150.0:
-            risk_factors.append(f"Unusual distance from cardholder location ({cleaned_data['distance_km']:.1f} km)")
+        risk_factors = self._extract_risk_factors(cleaned_data)
 
         if is_fraud == 1:
-            explanation = "The ensemble model classified this transaction as POTENTIALLY FRAUDULENT. "
+            explanation = "The supervised ensemble model classified this transaction as POTENTIALLY FRAUDULENT. "
             if risk_factors:
                 explanation += "Key contributing factors: " + ", ".join(risk_factors) + "."
             else:
                 explanation += "Statistical pattern aligns closely with historical fraudulent behaviors."
         else:
-            explanation = "The ensemble model classified this transaction as LIKELY LEGITIMATE. "
+            explanation = "The supervised ensemble model classified this transaction as LIKELY LEGITIMATE. "
             if risk_factors:
                 explanation += f"Note: Moderate flags detected ({', '.join(risk_factors)}), but overall score remains below decision threshold."
             else:
@@ -191,8 +233,10 @@ class FraudPredictor:
         return {
             "prediction": is_fraud,
             "label": label,
+            "score_type": "fraud_probability",
             "fraud_probability": round(fraud_prob, 4),
             "legit_probability": round(1.0 - fraud_prob, 4),
+            "anomaly_score": None,
             "threshold": round(threshold, 2),
             "risk_level": risk_level,
             "model_name": self.model_name,
@@ -201,6 +245,92 @@ class FraudPredictor:
             "cleaned_features": cleaned_data,
             "disclaimer": "This prediction is generated by an ensemble machine learning model for risk screening and decision support. It is not an absolute financial guarantee.",
         }
+
+    def _predict_isolation_forest(self, cleaned_data: Dict[str, Any], custom_threshold: Optional[float] = None) -> Dict[str, Any]:
+        """Executes inference using the unsupervised Isolation Forest anomaly detection model."""
+        if not self.is_iso_loaded:
+            raise RuntimeError("Isolation Forest model is not loaded. Train the model first.")
+
+        threshold = custom_threshold if custom_threshold is not None else self.iso_threshold
+        df_input = pd.DataFrame([cleaned_data])
+        X_proc = self.iso_preprocessor.transform(df_input)
+
+        # Higher anomaly score indicates greater outlierness
+        anomaly_score = float(-self.iso_model.decision_function(X_proc)[0])
+        is_fraud = int(anomaly_score >= threshold)
+
+        if anomaly_score >= threshold + 0.05:
+            risk_level = "Critical Risk"
+        elif anomaly_score >= threshold:
+            risk_level = "High Risk"
+        elif anomaly_score >= threshold - 0.05:
+            risk_level = "Moderate Attention"
+        else:
+            risk_level = "Low Risk"
+
+        label = "Fraudulent Transaction" if is_fraud == 1 else "Legitimate Transaction"
+        risk_factors = self._extract_risk_factors(cleaned_data)
+
+        if is_fraud == 1:
+            explanation = (
+                f"The unsupervised Isolation Forest model flagged this transaction as ANOMALOUS (Score: {anomaly_score:.4f} >= Threshold: {threshold:.4f}). "
+                "The transaction exhibits feature isolation characteristics atypical of legitimate behavior."
+            )
+            if risk_factors:
+                explanation += " Notable risk flags: " + ", ".join(risk_factors) + "."
+        else:
+            explanation = (
+                f"The unsupervised Isolation Forest model classified this transaction as NORMAL / INLIER (Score: {anomaly_score:.4f} < Threshold: {threshold:.4f}). "
+                "Feature combinations align with typical transaction patterns in feature space."
+            )
+            if risk_factors:
+                explanation += f" Note: Minor flags observed ({', '.join(risk_factors)}), but overall score remains within inlier limits."
+
+        return {
+            "prediction": is_fraud,
+            "label": label,
+            "score_type": "anomaly_score",
+            "anomaly_score": round(anomaly_score, 4),
+            "fraud_probability": None,
+            "legit_probability": None,
+            "threshold": round(threshold, 4),
+            "risk_level": risk_level,
+            "model_name": self.iso_name,
+            "explanation": explanation,
+            "risk_factors": risk_factors,
+            "cleaned_features": cleaned_data,
+            "disclaimer": "This prediction is generated by an unsupervised Isolation Forest model for outlier risk screening. It is not an absolute financial guarantee.",
+        }
+
+    def predict(
+        self,
+        feature_data: Dict[str, Any],
+        custom_threshold: Optional[float] = None,
+        model_name: Optional[str] = "gradient_boosting",
+    ) -> Dict[str, Any]:
+        """
+        Executes prediction on input features dictionary with model selection.
+        Defaults to Gradient Boosting when model_name is omitted or None.
+        """
+        valid, cleaned_data, err_msg = self.validate_features(feature_data)
+        if not valid:
+            raise ValueError(err_msg)
+
+        # Normalize model selection
+        target_model = "gradient_boosting"
+        if model_name:
+            norm = str(model_name).strip().lower().replace("-", "_").replace(" ", "_")
+            if norm in ["isolation_forest", "isolationforest", "iso_forest", "iforest", "unsupervised"]:
+                target_model = "isolation_forest"
+            elif norm in ["gradient_boosting", "gradientboosting", "gb", "supervised", "ensemble", "ensemble_model"]:
+                target_model = "gradient_boosting"
+            else:
+                raise ValueError(f"Unsupported model '{model_name}'. Choose from 'gradient_boosting' or 'isolation_forest'.")
+
+        if target_model == "isolation_forest":
+            return self._predict_isolation_forest(cleaned_data, custom_threshold=custom_threshold)
+        else:
+            return self._predict_supervised(cleaned_data, custom_threshold=custom_threshold)
 
 
 Tuple_Validation = tuple[bool, Dict[str, Any], str]

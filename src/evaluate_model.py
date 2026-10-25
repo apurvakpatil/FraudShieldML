@@ -56,13 +56,25 @@ def find_optimal_threshold(y_true, y_prob, metric="f1") -> float:
     """
     Finds the optimal decision threshold on validation data to balance precision and recall.
     Default metric is F1-score. Never evaluated on the test set to avoid leakage.
+    Handles bounded probabilities [0, 1] as well as continuous anomaly scores.
     """
-    thresholds = np.linspace(0.1, 0.9, 81)
-    best_score = -1.0
-    best_threshold = 0.5
+    y_prob_arr = np.asarray(y_prob)
+    min_val, max_val = float(np.min(y_prob_arr)), float(np.max(y_prob_arr))
 
+    # For standard class probabilities bounded in [0, 1]
+    if min_val >= 0.0 and max_val <= 1.0 and max_val > 0.1:
+        thresholds = np.linspace(0.1, 0.9, 81)
+        best_threshold = 0.5
+        decimals = 2
+    else:
+        # For arbitrary continuous anomaly scores (e.g. Isolation Forest)
+        thresholds = np.linspace(min_val, max_val, 151)
+        best_threshold = min_val + (max_val - min_val) * 0.5
+        decimals = 4
+
+    best_score = -1.0
     for th in thresholds:
-        preds = (y_prob >= th).astype(int)
+        preds = (y_prob_arr >= th).astype(int)
         if metric == "f1":
             score = f1_score(y_true, preds, zero_division=0)
         elif metric == "recall":
@@ -74,7 +86,7 @@ def find_optimal_threshold(y_true, y_prob, metric="f1") -> float:
             best_score = score
             best_threshold = th
 
-    return round(float(best_threshold), 2)
+    return round(float(best_threshold), decimals)
 
 
 def plot_confusion_matrix(y_true, y_pred, model_name: str, output_path: str, static_path: str = None):

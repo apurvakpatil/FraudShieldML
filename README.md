@@ -1,6 +1,6 @@
-# Credit Card Fraud Detection Using Ensemble Machine Learning
+# Credit Card Fraud Detection Using Ensemble Machine Learning & Isolation Forest Anomaly Detection
 
-An end-to-end machine learning system designed to detect fraudulent credit card transactions in real time using ensemble learning algorithms, robust feature engineering, an interactive Flask REST API, and a clean, modern web dashboard.
+An end-to-end machine learning system designed to detect fraudulent credit card transactions in real time using ensemble supervised learning algorithms, unsupervised Isolation Forest anomaly detection, robust feature engineering, an interactive Flask REST API, and a clean, modern web dashboard.
 
 ---
 
@@ -134,14 +134,21 @@ The system is trained and evaluated strictly on the **actual uploaded credit car
 
 ## 7. Algorithms Implemented
 
+### Supervised Classification & Ensemble Models
 1. **Logistic Regression (Baseline):** Linear classifier with `class_weight='balanced'` to establish an interpretable linear baseline.
 2. **Decision Tree Classifier:** Non-linear single tree with depth constraints (`max_depth=8`) and balanced class weighting.
 3. **Random Forest Classifier:** Bagging ensemble of 100 randomized decision trees operating with balanced weights to reduce variance.
 4. **Extra Trees Classifier (Extremely Randomized Trees):** Randomized ensemble that randomizes split thresholds to combat noise.
-5. **Gradient Boosting Classifier:** Sequential boosting ensemble that builds decision trees iteratively to correct prior classification residuals.
+5. **Gradient Boosting Classifier (Selected Supervised Model):** Sequential boosting ensemble that builds decision trees iteratively to correct prior classification residuals.
 6. **HistGradientBoostingClassifier:** Modern histogram-binned gradient boosting for fast execution on large data.
 7. **Soft Voting Classifier (Ensemble):** Combines the probability predictions of Random Forest, Extra Trees, and HistGradientBoosting using soft probability averaging.
 8. **Stacking Classifier (Meta-Ensemble):** Uses base estimators (Random Forest, Extra Trees, HistGradientBoosting) whose out-of-fold predictions train a meta-learner (Logistic Regression).
+
+### Unsupervised Anomaly Detection Model
+9. **Isolation Forest (`scikit-learn`):** Unsupervised tree ensemble trained **exclusively on legitimate transactions** (`y_train == 0`) from the training split. It isolates anomalies by recursively partitioning feature space, where anomalous transactions require fewer splits to be isolated.
+   * **Training Principle:** No fraud labels used during model fitting (zero label leakage).
+   * **Score Orientation:** Uses inverted decision function ($- \text{decision\_function}(X)$) so that higher scores represent higher anomaly risk.
+   * **Threshold Selection:** Operating decision threshold selected solely on held-out validation data to optimize F1-score without touching test data.
 
 ---
 
@@ -186,34 +193,59 @@ Ensemble learning combines multiple diverse machine learning models to solve a c
 
 ## 11. Actual Model Comparison & Test Set Results
 
-### Candidate Models Comparison (Validation Set):
+All candidate models were evaluated on the same cross-validation partition (Train: 60,000, Val: 20,000) and finally benchmarked on the identical untouched held-out test partition (20,000 transactions, 116 frauds).
 
-| Algorithm | Val Recall | Val Precision | Val F1-Score | Val PR-AUC | Val ROC-AUC | Val Accuracy | Training Time |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Gradient Boosting (Selected)** | **69.57%** | **76.19%** | **0.7273** | **0.5817** | **0.9792** | **99.70%** | **10.69s** |
-| Random Forest | 77.39% | 56.33% | 0.6520 | 0.7730 | 0.9862 | 99.52% | 0.75s |
-| Soft Voting Ensemble | 84.35% | 39.27% | 0.5359 | 0.7943 | 0.9713 | 99.16% | 6.14s |
-| HistGradientBoosting | 87.83% | 27.45% | 0.4182 | 0.7602 | 0.9848 | 98.59% | 2.57s |
-| Extra Trees | 80.00% | 15.23% | 0.2559 | 0.6808 | 0.9435 | 97.32% | 0.53s |
-| Decision Tree | 88.70% | 13.11% | 0.2284 | 0.3751 | 0.9388 | 96.56% | 0.21s |
-| Stacking Ensemble | 93.91% | 11.79% | 0.2095 | 0.7887 | 0.9881 | 95.93% | 17.09s |
-| Logistic Regression | 71.30% | 3.49% | 0.0666 | 0.1419 | 0.8914 | 88.50% | 0.43s |
+### Full Algorithm Benchmark Comparison (`results/model_comparison.csv`):
 
-### Final Model Evaluation on 20,000 Untouched Held-Out Test Transactions:
+| Algorithm | Paradigm | Recall | Precision | F1-Score | PR-AUC | ROC-AUC | Accuracy | Train Time |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Gradient Boosting (Selected)** | **Supervised Boosting** | **69.57%** | **76.92%** | **0.7306** | **0.5823** | **0.9792** | **99.70%** | **19.91s** |
+| Soft Voting Ensemble | Supervised Voting | 86.09% | 47.60% | 0.6130 | 0.8172 | 0.9746 | 99.38% | 14.38s |
+| HistGradientBoosting | Supervised Boosting | 86.96% | 42.02% | 0.5666 | 0.8191 | 0.9901 | 99.23% | 4.15s |
+| Random Forest | Supervised Bagging | 81.74% | 37.75% | 0.5165 | 0.7878 | 0.9835 | 99.12% | 2.16s |
+| Extra Trees | Supervised Bagging | 80.00% | 15.23% | 0.2559 | 0.6808 | 0.9435 | 97.32% | 2.21s |
+| Stacking Ensemble | Supervised Stacking | 93.04% | 14.74% | 0.2545 | 0.8048 | 0.9878 | 96.87% | 29.07s |
+| Decision Tree | Supervised Tree | 88.70% | 13.11% | 0.2284 | 0.3751 | 0.9388 | 96.56% | 0.39s |
+| **Isolation Forest** | **Unsupervised Anomaly** | **48.28%** | **7.03%** | **0.1227** | **0.0683** | **0.8510** | **95.99%** | **2.12s** |
+| Logistic Regression | Supervised Linear | 71.30% | 3.51% | 0.0668 | 0.1421 | 0.8912 | 88.55% | 1.56s |
 
-* **Selected Model:** Gradient Boosting Pipeline
-* **Optimized Decision Threshold:** `0.67` (selected via validation set)
-* **Test Accuracy:** `99.68%`
-* **Test Precision:** `77.66%`
-* **Test Recall:** `62.93%`
-* **Test F1-Score:** `0.6952`
-* **Test ROC-AUC:** `0.9445`
-* **Test PR-AUC:** `0.5249`
+---
+
+### Final Model Evaluations on 20,000 Untouched Held-Out Test Transactions
+
+#### 1. Gradient Boosting (Supervised Ensemble — Primary Production Model)
+* **Optimized Decision Threshold:** `0.67` (selected on validation partition)
+* **Test Accuracy:** `99.70%`
+* **Test Precision:** `79.57%`
+* **Test Recall:** `63.79%`
+* **Test F1-Score:** `0.7081`
+* **Test ROC-AUC:** `0.9548`
+* **Test PR-AUC:** `0.5767`
 * **Confusion Matrix Breakdown:**
-  * **True Positives (Frauds Caught):** 73
-  * **False Positives (Legitimate Flagged):** 21 *(Only 0.10% false alarm rate!)*
-  * **False Negatives (Frauds Missed):** 43
-  * **True Negatives (Legitimate Cleared):** 19,863
+  * **True Positives (Frauds Caught):** 74
+  * **False Positives (Legitimate Flagged):** 19 *(Only 0.096% false alarm rate out of 19,884 genuine transactions!)*
+  * **False Negatives (Frauds Missed):** 42
+  * **True Negatives (Legitimate Cleared):** 19,865
+
+#### 2. Isolation Forest (Unsupervised Anomaly Detection — Outlier Screening Model)
+* **Training Data:** Strictly legitimate transactions (`y_train == 0`, zero fraud labels used)
+* **Contamination Hyperparameter:** `0.01`
+* **Optimized Decision Threshold:** `-0.0215` (selected via validation partition)
+* **Test Accuracy:** `95.99%`
+* **Test Recall:** `48.28%` *(Successfully flagged 56 out of 116 frauds without ever seeing a fraud label!)*
+* **Test Precision:** `7.03%` *(741 false alarms out of 19,884 legitimate transactions)*
+* **Test F1-Score:** `0.1227`
+* **Test ROC-AUC:** `0.8510` *(Robust discriminative separation for an unsupervised model)*
+* **Test PR-AUC:** `0.0683`
+* **Confusion Matrix Breakdown:**
+  * **True Positives (Frauds Caught):** 56
+  * **False Positives (Legitimate Flagged):** 741
+  * **False Negatives (Frauds Missed):** 60
+  * **True Negatives (Legitimate Cleared):** 19,143
+
+#### Key Takeaways: Supervised vs. Unsupervised Trade-offs
+* **Gradient Boosting** achieves superior precision (`79.57%` vs `7.03%`) and F1-score (`0.7081` vs `0.1227`) because it directly learns the boundaries separating fraudulent patterns from legitimate consumer behavior using ground-truth annotations.
+* **Isolation Forest** provides high utility (`ROC-AUC: 0.8510`, `Recall: 48.28%`) in scenarios where fraud labels are delayed, incomplete, or absent (zero-day fraud detection and cold-start financial systems), identifying unusual patterns purely as topological outliers in feature space.
 
 ---
 
@@ -233,21 +265,24 @@ AI_MINI_PROJECT_Fraude_Detection/
 │   ├── data_loader.py                  # Dataset discovery, streaming inspection, stratified sampling
 │   ├── preprocessing.py                # FeatureEngineer, RobustScaler, OneHotEncoder pipeline
 │   ├── train_model.py                  # Candidate model training, validation, threshold tuning, saving
+│   ├── isolation_forest.py             # Unsupervised Isolation Forest model training on legitimate data
 │   ├── evaluate_model.py               # Metrics calculation, PR/ROC/CM/Importance plot generation
-│   ├── predict.py                      # Production inference service, validation, explanations
+│   ├── predict.py                      # Multi-model inference service (GB + Isolation Forest), validation
 │   └── eda.py                          # Exploratory Data Analysis visualization generator
 │
 ├── models/
-│   ├── fraud_detection_model.joblib    # Fitted end-to-end scikit-learn pipeline artifact
-│   └── model_metadata.json             # Complete model training metadata, features, and metrics
+│   ├── fraud_detection_model.joblib    # Fitted end-to-end Gradient Boosting scikit-learn pipeline
+│   ├── model_metadata.json             # Complete supervised training metadata and test metrics
+│   ├── isolation_forest_model.joblib   # Persisted (preprocessor, isolation_forest) artifact tuple
+│   └── isolation_forest_metadata.json  # Isolation Forest threshold, contamination, and evaluation metrics
 │
 ├── results/
-│   ├── model_comparison.csv            # Algorithm performance comparison table
-│   ├── evaluation_metrics.json         # Held-out test set metrics
+│   ├── model_comparison.csv            # Combined benchmark table (Supervised + Isolation Forest)
+│   ├── evaluation_metrics.json         # Supervised held-out test set metrics
 │   ├── classification_report.txt       # Precision, recall, and support breakdown
 │   ├── confusion_matrix.png            # Confusion matrix plot
-│   ├── roc_curve.png                   # ROC curves comparison plot
-│   ├── precision_recall_curve.png      # PR curves comparison plot
+│   ├── roc_curve.png                   # Multi-model ROC comparison plot (including Isolation Forest)
+│   ├── precision_recall_curve.png      # Multi-model PR comparison plot (including Isolation Forest)
 │   ├── feature_importance.png          # Top 15 feature importances plot
 │   ├── eda_class_distribution.png      # Class imbalance chart
 │   ├── eda_amount_distribution.png     # Amount density (log scale) chart
@@ -256,17 +291,17 @@ AI_MINI_PROJECT_Fraude_Detection/
 │   └── eda_correlation_matrix.png      # Feature correlation heatmap
 │
 ├── templates/
-│   └── index.html                      # Modern, responsive web frontend dashboard
+│   └── index.html                      # Modern, responsive web frontend dashboard with model selection
 │
 ├── static/
 │   ├── css/
 │   │   └── style.css                   # Custom light theme CSS styling
 │   ├── js/
-│   │   └── app.js                      # Dynamic frontend logic, API calls, Chart.js
+│   │   └── app.js                      # Dynamic frontend logic, API calls, Chart.js, multi-model UI
 │   └── images/                         # Diagnostic and EDA charts for web presentation
 │
 ├── tests/
-│   └── test_api.py                     # Automated unit and integration test suite (10 tests)
+│   └── test_api.py                     # Automated unit and integration test suite (15 tests)
 │
 ├── app.py                              # Flask application backend with REST API endpoints
 ├── run.py                              # Application launcher entrypoint
@@ -318,13 +353,24 @@ python src/eda.py
 
 ## 15. Running the Automated Test Suite
 
-Execute the 10 automated unit and integration tests:
+Execute the 15 automated unit and integration tests:
 
 ```bash
 python -m pytest tests/test_api.py -v
 ```
 
-All tests verify dataset discovery, model persistence, sample transactions, inference logic, and Flask endpoints.
+All 15 tests verify:
+* Dataset discovery and genuine transaction extraction
+* Model persistence and loading (both Gradient Boosting and Isolation Forest)
+* System health reporting for both models (`/api/health`)
+* Default prediction endpoint (backward-compatible Gradient Boosting inference)
+* High-risk vs. low-risk fraud scenarios
+* Input payload validation and bounds checking
+* Explicit model selection (`"model": "isolation_forest"`)
+* Anomaly score calculation and score orientation (higher score = more anomalous)
+* Rejection of unsupported model names with HTTP 400
+* Model comparison endpoint (`/api/comparison`) verifying no duplicates
+* Model metadata integrity and web dashboard serving
 
 ---
 
@@ -346,33 +392,37 @@ Open your browser and navigate to:
 ### Method A: Through the Web Interface
 1. Open `http://127.0.0.1:5000` in your web browser.
 2. Scroll to the **Transaction Risk Screening Form**.
-3. Click the **Load Real Sample** button to choose from genuine transactions extracted from the dataset:
+3. Choose the **Detection Algorithm Architecture**:
+   * **Gradient Boosting (Default):** Supervised ensemble outputting calibrated fraud probabilities.
+   * **Isolation Forest:** Unsupervised anomaly detector outputting pure outlier anomaly scores.
+4. Click the **Load Real Sample** button to choose from genuine transactions extracted from the dataset:
    * **Sample 1 / Sample 2:** Standard legitimate transactions ($10 - $75, daytime).
    * **Sample 3 / Sample 4:** High-risk fraudulent transactions ($300 - $980, late night hours).
-4. Click **Analyze Transaction**.
-5. Observe the live risk assessment card:
-   * Status badge (**Fraud Alert** vs **Legitimate Transaction**).
-   * Fraud Probability meter with risk level coloring.
-   * Model rationale highlighting specific contributing risk factors.
-   * Real-time session history table tracking all past predictions.
+5. Click **Analyze Transaction**.
+6. Observe the live risk assessment card:
+   * Status badge (**Fraud / Anomaly Alert** vs **Legitimate Transaction**).
+   * Dynamic Risk Meter: Displays **Fraud Probability** (0.0 to 1.0) for Gradient Boosting or **Anomaly Score** with respect to the decision threshold (`-0.0215`) for Isolation Forest.
+   * Model rationale highlighting specific contributing risk factors and feature vectors.
+   * Real-time session history table tracking all past predictions with model identification.
 
 ### Method B: Via REST API
+
+#### 1. Default Supervised Prediction (Gradient Boosting):
 Send an HTTP POST request to `/api/predict`:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/api/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "features": {
-      "amt": 850.00,
-      "category": "shopping_net",
-      "hour": 23,
-      "day_of_week": 4,
-      "distance_km": 280.0,
-      "age": 42,
-      "gender": "F",
-      "city_pop": 75000
-    }
+    "model": "gradient_boosting",
+    "amt": 850.00,
+    "category": "shopping_net",
+    "hour": 23,
+    "day_of_week": 4,
+    "distance_km": 280.0,
+    "age": 42,
+    "gender": "F",
+    "city_pop": 75000
   }'
 ```
 
@@ -382,14 +432,60 @@ curl -X POST http://127.0.0.1:5000/api/predict \
   "status": "success",
   "prediction": 1,
   "label": "Fraudulent Transaction",
+  "score_type": "fraud_probability",
   "fraud_probability": 0.8845,
   "legit_probability": 0.1155,
+  "anomaly_score": null,
   "threshold": 0.67,
-  "risk_level": "High Risk",
+  "risk_level": "Critical Risk",
   "model_name": "Gradient Boosting",
-  "explanation": "The ensemble model classified this transaction as POTENTIALLY FRAUDULENT. Key contributing factors: High transaction amount ($850.00), Off-peak night hour (23:00), Elevated risk merchant category 'shopping_net', Unusual distance from cardholder location (280.0 km).",
+  "explanation": "The supervised ensemble model classified this transaction as POTENTIALLY FRAUDULENT. Key contributing factors: High transaction amount ($850.00), Off-peak night hour (23:00), Elevated risk merchant category 'shopping_net', Unusual distance from cardholder location (280.0 km).",
   "disclaimer": "This prediction is generated by an ensemble machine learning model for risk screening and decision support. It is not an absolute financial guarantee."
 }
+```
+
+#### 2. Unsupervised Anomaly Detection (Isolation Forest):
+Send an HTTP POST request with `"model": "isolation_forest"`:
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "isolation_forest",
+    "amt": 980.50,
+    "category": "shopping_net",
+    "hour": 2,
+    "day_of_week": 5,
+    "distance_km": 350.0,
+    "age": 45,
+    "gender": "F",
+    "city_pop": 120000
+  }'
+```
+
+**Example JSON Response:**
+```json
+{
+  "status": "success",
+  "prediction": 1,
+  "label": "Fraudulent Transaction",
+  "score_type": "anomaly_score",
+  "anomaly_score": 0.0152,
+  "fraud_probability": null,
+  "legit_probability": null,
+  "threshold": -0.0215,
+  "risk_level": "Critical Risk",
+  "model_name": "Isolation Forest",
+  "explanation": "The unsupervised Isolation Forest model flagged this transaction as ANOMALOUS (Score: 0.0152 >= Threshold: -0.0215). The transaction exhibits feature isolation characteristics atypical of legitimate behavior. Notable risk flags: High transaction amount ($980.50), Off-peak night hour (2:00), Elevated risk merchant category 'shopping_net', Unusual distance from cardholder location (350.0 km).",
+  "disclaimer": "This prediction is generated by an unsupervised Isolation Forest model for outlier risk screening. It is not an absolute financial guarantee."
+}
+```
+
+#### 3. Model Benchmark Comparison Endpoint:
+Retrieve benchmark metrics comparing all supervised models against Isolation Forest:
+
+```bash
+curl -X GET http://127.0.0.1:5000/api/comparison
 ```
 
 ---
@@ -400,5 +496,4 @@ curl -X POST http://127.0.0.1:5000/api/predict \
 * **Graph Neural Networks (GNNs):** Modeling relationships between cardholders, merchants, and devices as a heterogeneous graph to catch organized fraud rings.
 * **Online Adaptive Learning:** Incrementally updating decision trees to adapt to new fraud patterns without full retraining.
 * **Explainable AI (SHAP/LIME):** Integrating SHAP waterfall plots for granular local feature attribution in bank compliance workflows.
-#   F a u d e S h i e l d M L  
- 
+# FaudeShieldML

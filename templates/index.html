@@ -187,6 +187,33 @@
             <div class="p-4">
               <form id="prediction-form" novalidate>
                 
+                <!-- Model Architecture Selector -->
+                <div class="mb-4 p-3 bg-light rounded border">
+                  <label class="form-label fw-bold text-dark d-flex align-items-center gap-2 mb-2">
+                    <i class="fa-solid fa-brain text-primary"></i> Detection Algorithm Architecture
+                  </label>
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <div class="form-check p-2 border rounded bg-white h-100">
+                        <input class="form-check-input ms-1 me-2" type="radio" name="modelSelector" id="model-gb" value="gradient_boosting" checked>
+                        <label class="form-check-label w-100 cursor-pointer" for="model-gb">
+                          <strong class="d-block text-dark">Gradient Boosting <span class="badge bg-primary text-white" style="font-size: 0.65rem;">Supervised Default</span></strong>
+                          <span class="text-muted small">Supervised Ensemble &bull; Calibrated Fraud Probability</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-check p-2 border rounded bg-white h-100">
+                        <input class="form-check-input ms-1 me-2" type="radio" name="modelSelector" id="model-if" value="isolation_forest">
+                        <label class="form-check-label w-100 cursor-pointer" for="model-if">
+                          <strong class="d-block text-dark">Isolation Forest <span class="badge bg-secondary text-white" style="font-size: 0.65rem;">Unsupervised</span></strong>
+                          <span class="text-muted small">Anomaly Detection &bull; Pure Inlier Trained Score</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Group 1: Transaction Characteristics -->
                 <div class="form-section-title">
                   <i class="fa-solid fa-receipt"></i> 1. Transaction Monetary Details
@@ -326,19 +353,19 @@
                     <span class="badge bg-light text-dark border px-2 py-1" id="result-risk-level">Low Risk</span>
                   </div>
 
-                  <!-- Probability Meter -->
+                  <!-- Score / Anomaly Meter -->
                   <div class="mb-3">
                     <div class="d-flex justify-content-between small fw-bold mb-1">
-                      <span>Fraud Probability:</span>
+                      <span id="result-score-label">Fraud Probability:</span>
                       <span id="result-fraud-prob" class="text-danger">3.4%</span>
                     </div>
                     <div class="risk-meter">
                       <div class="risk-meter-fill low" id="result-meter-fill" style="width: 3.4%;"></div>
                     </div>
                     <div class="d-flex justify-content-between text-muted small" style="font-size: 0.72rem;">
-                      <span>0.0 (Safe)</span>
-                      <span>Threshold: <strong id="result-threshold-val">0.67</strong></span>
-                      <span>1.0 (Definite Fraud)</span>
+                      <span id="result-meter-min">0.0 (Safe)</span>
+                      <span>Decision Threshold: <strong id="result-threshold-val">0.67</strong></span>
+                      <span id="result-meter-max">1.0 (Definite Fraud)</span>
                     </div>
                   </div>
 
@@ -357,8 +384,8 @@
                     <div class="col-6">
                       <strong>Evaluating Model:</strong> <span id="result-model-name">Gradient Boosting</span>
                     </div>
-                    <div class="col-6">
-                      <strong>Legitimate Score:</strong> <span id="result-legit-prob">96.6%</span>
+                    <div class="col-6" id="result-legit-col">
+                      <strong id="result-secondary-label">Legitimate Score:</strong> <span id="result-legit-prob">96.6%</span>
                     </div>
                   </div>
 
@@ -399,17 +426,18 @@
               <tr>
                 <th>#</th>
                 <th>Time</th>
+                <th>Model</th>
                 <th>Amount ($)</th>
                 <th>Category</th>
                 <th>Hour</th>
-                <th>Fraud Probability</th>
+                <th>Risk / Anomaly Score</th>
                 <th>Risk Level</th>
                 <th>Prediction Status</th>
               </tr>
             </thead>
             <tbody id="history-tbody">
               <tr>
-                <td colspan="8" class="text-center py-4 text-muted small">No transactions evaluated in this session yet. Test a transaction above.</td>
+                <td colspan="9" class="text-center py-4 text-muted small">No transactions evaluated in this session yet. Test a transaction above.</td>
               </tr>
             </tbody>
           </table>
@@ -469,17 +497,22 @@
             
             <div class="col-lg-5">
               <div class="card-custom p-3 h-100">
-                <h4 class="h6 fw-bold mb-2">Why Accuracy is Misleading in Fraud Detection</h4>
-                <p class="small text-muted mb-2">
-                  Because fraud occurs in only <strong>0.58%</strong> of transactions, a naive model that predicts every single transaction is legitimate achieves <strong>99.42% accuracy</strong> while catching <strong>zero</strong> frauds.
-                </p>
+                <h4 class="h6 fw-bold mb-2">Supervised vs. Unsupervised Comparison</h4>
                 <div class="p-2 bg-light rounded border mb-2 small">
-                  <div class="fw-bold text-dark mb-1">Key Metrics for Imbalanced Data:</div>
-                  <ul class="mb-0 ps-3 text-secondary">
-                    <li><strong>Recall:</strong> Percentage of actual frauds successfully caught.</li>
-                    <li><strong>Precision:</strong> Percentage of flagged transactions that were genuine frauds (avoiding annoying legitimate cardholders).</li>
-                    <li><strong>PR-AUC:</strong> Area under the Precision-Recall curve — the benchmark of choice for fraud systems.</li>
-                  </ul>
+                  <div class="fw-bold text-primary mb-1"><i class="fa-solid fa-layer-group me-1"></i> Supervised Ensemble (Gradient Boosting)</div>
+                  <p class="text-secondary mb-1">
+                    Trained with fraud & legitimate labels. Optimizes classification boundaries specifically for imbalanced fraud patterns. Delivers calibrated probabilities and high precision.
+                  </p>
+                  <div class="fw-bold text-success mb-1 mt-2"><i class="fa-solid fa-tree me-1"></i> Unsupervised Isolation Forest</div>
+                  <p class="text-secondary mb-0">
+                    Trained <em>strictly on legitimate transactions</em>. Detects fraud as topological outliers and anomalies without requiring prior fraud labels. Ideal for zero-day fraud and cold-start systems.
+                  </p>
+                </div>
+                <div class="p-2 bg-light rounded border small">
+                  <div class="fw-bold text-dark mb-1">Why Imbalance Metrics Matter:</div>
+                  <p class="text-secondary mb-0">
+                    With ~0.58% fraud prevalence, PR-AUC and Recall are the most critical benchmarks. A naive predictor achieves 99.4% accuracy while catching zero fraud.
+                  </p>
                 </div>
               </div>
             </div>

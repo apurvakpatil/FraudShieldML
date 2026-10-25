@@ -40,6 +40,9 @@ def health_check():
         "model_loaded": predictor.is_loaded,
         "model_name": predictor.model_name,
         "threshold": predictor.threshold,
+        "isolation_forest_loaded": predictor.is_iso_loaded,
+        "isolation_forest_threshold": predictor.iso_threshold,
+        "available_models": ["gradient_boosting", "isolation_forest"],
         "version": "1.0.0"
     }), 200
 
@@ -49,6 +52,7 @@ def predict_transaction():
     """
     Fraud Prediction Endpoint.
     Validates payload, executes pipeline inference, and returns risk assessment.
+    Supports model selection: 'gradient_boosting' (default) or 'isolation_forest'.
     """
     try:
         payload = request.get_json(force=True, silent=False)
@@ -58,18 +62,40 @@ def predict_transaction():
                 "message": "Invalid JSON or empty request payload."
             }), 400
 
-        # Support both {"features": {...}} and flat payload {...}
-        features = payload.get("features", payload)
+        # Support both {"features": {...}, "model": "..."} and flat payload {...}
+        if "features" in payload and isinstance(payload["features"], dict):
+            features = payload["features"]
+            model_choice = payload.get("model", payload.get("model_name", "gradient_boosting"))
+        else:
+            model_choice = payload.get("model", payload.get("model_name", "gradient_boosting"))
+            features = {k: v for k, v in payload.items() if k not in ["model", "model_name"]}
+
+        # Normalize and validate model choice early
+        norm_model = str(model_choice).strip().lower().replace("-", "_").replace(" ", "_")
+        if norm_model in ["isolation_forest", "isolationforest", "iso_forest", "iforest", "unsupervised"]:
+            target_model = "isolation_forest"
+        elif norm_model in ["gradient_boosting", "gradientboosting", "gb", "supervised", "ensemble", "ensemble_model"]:
+            target_model = "gradient_boosting"
+        else:
+            return jsonify({
+                "status": "error",
+                "message": f"Unsupported model '{model_choice}'. Choose from 'gradient_boosting' or 'isolation_forest'."
+            }), 400
 
         predictor = get_predictor()
-        if not predictor.is_loaded:
+        if target_model == "isolation_forest" and not predictor.is_iso_loaded:
+            return jsonify({
+                "status": "error",
+                "message": "Isolation Forest model is not loaded. Train the model first."
+            }), 503
+        elif target_model == "gradient_boosting" and not predictor.is_loaded:
             return jsonify({
                 "status": "error",
                 "message": "Fraud detection model is not loaded. Train the model first."
             }), 503
 
         # Execute prediction
-        result = predictor.predict(features)
+        result = predictor.predict(features, model_name=target_model)
         return jsonify({
             "status": "success",
             **result
@@ -80,6 +106,11 @@ def predict_transaction():
             "status": "error",
             "message": str(ve)
         }), 400
+    except RuntimeError as re:
+        return jsonify({
+            "status": "error",
+            "message": str(re)
+        }), 503
     except Exception as e:
         return jsonify({
             "status": "error",
@@ -113,27 +144,65 @@ def get_metrics():
     }), 200
 
 
+@app.route("/api/comparison", methods=["GET"])
+def get_comparison():
+    """
+    Returns benchmark comparison data across all candidate models including Isolation Forest.
+    """
+    comparison_path = os.path.join(RESULTS_DIR, "model_comparison.csv")
+    metrics_path = os.path.join(RESULTS_DIR, "evaluation_metrics.json")
+    iso_meta_path = os.path.join(MODELS_DIR, "isolation_forest_metadata.json")
+
+    comparison_data = []
+    if os.path.exists(comparison_path):
+        df_comp = pd.read_csv(comparison_path)
+        comparison_data = df_comp.to_dict(orient="records")
+
+    metrics_data = {}
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "r") as f:
+            metrics_data = json.load(f)
+
+    iso_meta = {}
+    if os.path.exists(iso_meta_path):
+        with open(iso_meta_path, "r") as f:
+            iso_meta = json.load(f)
+
+    return jsonify({
+        "status": "success",
+        "model_comparison": comparison_data,
+        "supervised_test_metrics": metrics_data,
+        "isolation_forest_metadata": iso_meta
+    }), 200
+
+
 @app.route("/api/model-info", methods=["GET"])
 def get_model_info():
     """
     Returns architecture, input feature schema, decision threshold, and training metadata.
     """
     metadata_path = os.path.join(MODELS_DIR, "model_metadata.json")
+    iso_meta_path = os.path.join(MODELS_DIR, "isolation_forest_metadata.json")
+
+    supervised_metadata = {}
     if os.path.exists(metadata_path):
         with open(metadata_path, "r") as f:
-            metadata = json.load(f)
-        return jsonify({
-            "status": "success",
-            "metadata": metadata
-        }), 200
-    else:
-        predictor = get_predictor()
-        return jsonify({
-            "status": "partial",
-            "model_name": predictor.model_name,
-            "threshold": predictor.threshold,
-            "model_loaded": predictor.is_loaded
-        }), 200
+            supervised_metadata = json.load(f)
+
+    iso_metadata = {}
+    if os.path.exists(iso_meta_path):
+        with open(iso_meta_path, "r") as f:
+            iso_metadata = json.load(f)
+
+    predictor = get_predictor()
+    return jsonify({
+        "status": "success",
+        "available_models": ["gradient_boosting", "isolation_forest"],
+        "metadata": supervised_metadata,
+        "isolation_forest_metadata": iso_metadata,
+        "model_loaded": predictor.is_loaded,
+        "isolation_forest_loaded": predictor.is_iso_loaded,
+    }), 200
 
 
 @app.route("/api/sample-transactions", methods=["GET"])

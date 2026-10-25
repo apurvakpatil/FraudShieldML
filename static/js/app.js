@@ -66,15 +66,23 @@ async function fetchModelMetrics() {
     if (tbody && comp.length > 0) {
       tbody.innerHTML = "";
       comp.forEach((row, idx) => {
-        const isBest = idx === 0;
+        const isBest = idx === 0 && row.Model !== "Isolation Forest";
+        const isIso = row.Model === "Isolation Forest";
         const tr = document.createElement("tr");
         if (isBest) tr.className = "table-primary fw-bold";
         
+        let modelBadge = "";
+        if (isBest) {
+          modelBadge = '<span class="badge bg-primary text-white ms-2" style="font-size: 0.7rem;">Selected Ensemble</span>';
+        } else if (isIso) {
+          modelBadge = '<span class="badge bg-secondary text-white ms-2" style="font-size: 0.7rem;">Unsupervised</span>';
+        }
+
         tr.innerHTML = `
           <td>
-            ${isBest ? '<i class="fa-solid fa-crown text-warning me-1"></i>' : ''}
+            ${isBest ? '<i class="fa-solid fa-crown text-warning me-1"></i>' : (isIso ? '<i class="fa-solid fa-tree text-success me-1"></i>' : '')}
             ${row.Model}
-            ${isBest ? '<span class="badge bg-primary text-white ms-2" style="font-size: 0.7rem;">Selected Ensemble</span>' : ''}
+            ${modelBadge}
           </td>
           <td>${(row.Recall * 100).toFixed(2)}%</td>
           <td>${(row.Precision * 100).toFixed(2)}%</td>
@@ -242,7 +250,11 @@ async function handlePredictionSubmit() {
     return;
   }
 
+  // Get selected model
+  const selectedModel = document.querySelector('input[name="modelSelector"]:checked')?.value || "gradient_boosting";
+
   const payload = {
+    model: selectedModel,
     amt: amt,
     category: document.getElementById("category").value,
     hour: parseInt(document.getElementById("hour").value, 10),
@@ -296,30 +308,61 @@ function renderPredictionResult(result, input) {
 
   const badge = document.getElementById("result-status-badge");
   const riskLevel = document.getElementById("result-risk-level");
+  const scoreLabel = document.getElementById("result-score-label");
   const fraudProbText = document.getElementById("result-fraud-prob");
   const legitProbText = document.getElementById("result-legit-prob");
+  const secondaryLabel = document.getElementById("result-secondary-label");
   const meterFill = document.getElementById("result-meter-fill");
+  const meterMin = document.getElementById("result-meter-min");
+  const meterMax = document.getElementById("result-meter-max");
   const thresholdVal = document.getElementById("result-threshold-val");
   const explanation = document.getElementById("result-explanation");
   const modelName = document.getElementById("result-model-name");
   const timestamp = document.getElementById("result-timestamp");
 
   const isFraud = result.prediction === 1;
-  const fraudProbPct = (result.fraud_probability * 100).toFixed(1) + "%";
-  const legitProbPct = (result.legit_probability * 100).toFixed(1) + "%";
+  const isIso = result.score_type === "anomaly_score" || (result.anomaly_score !== null && result.anomaly_score !== undefined);
 
-  fraudProbText.textContent = fraudProbPct;
-  legitProbText.textContent = legitProbPct;
-  thresholdVal.textContent = result.threshold;
+  if (isIso) {
+    if (scoreLabel) scoreLabel.textContent = "Isolation Forest Anomaly Score:";
+    fraudProbText.textContent = Number(result.anomaly_score).toFixed(4);
+    if (secondaryLabel) secondaryLabel.textContent = "Approach:";
+    if (legitProbText) legitProbText.textContent = "Unsupervised Inlier Fit";
+    if (meterMin) meterMin.textContent = "Low Anomaly";
+    if (meterMax) meterMax.textContent = "Outlier / Anomaly";
+    thresholdVal.textContent = Number(result.threshold).toFixed(4);
+
+    // Scale anomaly score relative to threshold for visual progress bar
+    const th = Number(result.threshold);
+    const sc = Number(result.anomaly_score);
+    let pct = 30;
+    if (sc >= th) {
+      pct = Math.min(100, Math.max(55, Math.round(55 + ((sc - th) / (Math.abs(th) + 0.1 || 0.1)) * 45)));
+    } else {
+      pct = Math.min(48, Math.max(5, Math.round(48 * (1 - Math.min(1, Math.max(0, (th - sc) / (Math.abs(th) + 0.1 || 0.1)))))));
+    }
+    meterFill.style.width = pct + "%";
+  } else {
+    if (scoreLabel) scoreLabel.textContent = "Fraud Probability:";
+    const fraudProbPct = (Number(result.fraud_probability) * 100).toFixed(1) + "%";
+    const legitProbPct = (Number(result.legit_probability) * 100).toFixed(1) + "%";
+    fraudProbText.textContent = fraudProbPct;
+    if (secondaryLabel) secondaryLabel.textContent = "Legitimate Score:";
+    if (legitProbText) legitProbText.textContent = legitProbPct;
+    if (meterMin) meterMin.textContent = "0.0 (Safe)";
+    if (meterMax) meterMax.textContent = "1.0 (Definite Fraud)";
+    thresholdVal.textContent = result.threshold;
+
+    meterFill.style.width = Math.min(100, Math.max(2, Number(result.fraud_probability) * 100)) + "%";
+  }
+
   explanation.textContent = result.explanation;
   modelName.textContent = result.model_name;
   timestamp.textContent = new Date().toLocaleTimeString();
 
-  meterFill.style.width = Math.min(100, Math.max(2, result.fraud_probability * 100)) + "%";
-
   if (isFraud) {
     badge.className = "result-badge fraud";
-    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Fraud Alert</span>`;
+    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Fraud / Anomaly Alert</span>`;
     riskLevel.className = "badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1";
     riskLevel.textContent = result.risk_level || "High Risk";
     meterFill.className = "risk-meter-fill high";
@@ -328,7 +371,8 @@ function renderPredictionResult(result, input) {
     badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Legitimate Transaction</span>`;
     riskLevel.className = "badge bg-success-subtle text-success border border-success-subtle px-2 py-1";
     riskLevel.textContent = result.risk_level || "Low Risk";
-    meterFill.className = result.fraud_probability > 0.3 ? "risk-meter-fill moderate" : "risk-meter-fill low";
+    const isModerate = isIso ? false : (Number(result.fraud_probability) > 0.3);
+    meterFill.className = isModerate ? "risk-meter-fill moderate" : "risk-meter-fill low";
   }
 }
 
@@ -353,13 +397,19 @@ function addToHistory(result, input) {
   const tr = document.createElement("tr");
   const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
+  const isIso = result.score_type === "anomaly_score" || (result.anomaly_score !== null && result.anomaly_score !== undefined);
+  const scoreDisplay = isIso
+    ? `Anomaly: ${Number(result.anomaly_score).toFixed(4)}`
+    : `${(Number(result.fraud_probability) * 100).toFixed(1)}%`;
+
   tr.innerHTML = `
     <td>${sessionStats.total}</td>
     <td>${timeStr}</td>
+    <td><span class="badge ${isIso ? 'bg-secondary' : 'bg-primary'} text-white" style="font-size: 0.72rem;">${result.model_name}</span></td>
     <td class="fw-bold">$${input.amt.toFixed(2)}</td>
     <td><span class="badge bg-light text-dark border">${input.category}</span></td>
     <td>${input.hour}:00</td>
-    <td><strong>${(result.fraud_probability * 100).toFixed(1)}%</strong></td>
+    <td><strong>${scoreDisplay}</strong></td>
     <td>
       <span class="badge ${isFraud ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success'}">
         ${result.risk_level}

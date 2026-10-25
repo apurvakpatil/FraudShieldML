@@ -138,3 +138,106 @@ def test_index_page(client):
     response = client.get("/")
     assert response.status_code == 200
     assert b"Credit Card Fraud Detection" in response.data
+
+
+def test_health_includes_both_models(client):
+    """Verifies that health check reports both supervised and unsupervised models."""
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "available_models" in data
+    assert "gradient_boosting" in data["available_models"]
+    assert "isolation_forest" in data["available_models"]
+    assert data["isolation_forest_loaded"] is True
+
+
+def test_prediction_isolation_forest(client):
+    """Tests POST /api/predict explicitly selecting Isolation Forest model."""
+    payload = {
+        "model": "isolation_forest",
+        "amt": 1500.00,
+        "category": "shopping_net",
+        "hour": 2,
+        "day_of_week": 6,
+        "distance_km": 280.0,
+        "age": 42,
+        "gender": "M",
+        "city_pop": 80000
+    }
+    response = client.post("/api/predict", json=payload)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert data["model_name"] == "Isolation Forest"
+    assert data["score_type"] == "anomaly_score"
+    assert "anomaly_score" in data
+    assert isinstance(data["anomaly_score"], float)
+    assert "threshold" in data
+    assert data["prediction"] in [0, 1]
+    assert data["label"] in ["Fraudulent Transaction", "Legitimate Transaction"]
+
+
+def test_prediction_invalid_model_choice(client):
+    """Tests POST /api/predict rejects an unsupported model parameter with HTTP 400."""
+    payload = {
+        "model": "deep_quantum_network",
+        "amt": 50.0,
+        "category": "grocery_pos"
+    }
+    response = client.post("/api/predict", json=payload)
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data["status"] == "error"
+    assert "unsupported model" in data["message"].lower()
+
+
+def test_comparison_endpoint(client):
+    """Tests GET /api/comparison endpoint returns both models in benchmark results."""
+    response = client.get("/api/comparison")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert "model_comparison" in data
+    assert "isolation_forest_metadata" in data
+
+    models_in_comp = [row["Model"] for row in data["model_comparison"]]
+    assert "Isolation Forest" in models_in_comp
+    assert "Gradient Boosting" in models_in_comp
+
+    # Ensure no duplicates in comparison table
+    assert len(models_in_comp) == len(set(models_in_comp)), "Duplicate models found in comparison table"
+
+
+def test_isolation_forest_score_orientation():
+    """Verifies that higher anomaly scores correspond to more anomalous transactions."""
+    predictor = get_predictor()
+    assert predictor.is_iso_loaded
+
+    normal_tx = {
+        "amt": 18.50,
+        "category": "grocery_pos",
+        "hour": 14,
+        "day_of_week": 2,
+        "distance_km": 3.0,
+        "age": 36,
+        "gender": "F",
+        "city_pop": 50000
+    }
+    outlier_tx = {
+        "amt": 4850.00,
+        "category": "shopping_net",
+        "hour": 3,
+        "day_of_week": 6,
+        "distance_km": 450.0,
+        "age": 75,
+        "gender": "M",
+        "city_pop": 500
+    }
+
+    res_normal = predictor.predict(normal_tx, model_name="isolation_forest")
+    res_outlier = predictor.predict(outlier_tx, model_name="isolation_forest")
+
+    # Higher score = more anomalous
+    assert res_outlier["anomaly_score"] > res_normal["anomaly_score"], (
+        f"Expected outlier score ({res_outlier['anomaly_score']}) to exceed normal score ({res_normal['anomaly_score']})"
+    )
