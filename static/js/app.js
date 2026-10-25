@@ -279,7 +279,7 @@ async function handlePredictionSubmit() {
     const result = await res.json();
 
     if (result.status === "error") {
-      alert("Prediction Error: " + result.message);
+      renderValidationError(result.message);
       return;
     }
 
@@ -375,6 +375,53 @@ function renderPredictionResult(result, input) {
     meterFill.className = isModerate ? "risk-meter-fill moderate" : "risk-meter-fill low";
   }
 }
+
+/**
+ * Renders a validation/rejection error into the result panel
+ * instead of using a disruptive browser alert popup.
+ */
+function renderValidationError(message) {
+  document.getElementById("result-empty-state").classList.add("d-none");
+  const card = document.getElementById("result-card");
+  card.classList.remove("d-none");
+
+  const badge = document.getElementById("result-status-badge");
+  const riskLevel = document.getElementById("result-risk-level");
+  const scoreLabel = document.getElementById("result-score-label");
+  const fraudProbText = document.getElementById("result-fraud-prob");
+  const legitProbText = document.getElementById("result-legit-prob");
+  const secondaryLabel = document.getElementById("result-secondary-label");
+  const meterFill = document.getElementById("result-meter-fill");
+  const meterMin = document.getElementById("result-meter-min");
+  const meterMax = document.getElementById("result-meter-max");
+  const thresholdVal = document.getElementById("result-threshold-val");
+  const explanation = document.getElementById("result-explanation");
+  const modelName = document.getElementById("result-model-name");
+  const timestamp = document.getElementById("result-timestamp");
+
+  badge.className = "result-badge fraud";
+  badge.innerHTML = `<i class="fa-solid fa-ban"></i> <span>Invalid Transaction — Rejected</span>`;
+
+  riskLevel.className = "badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1";
+  riskLevel.textContent = "Validation Failed";
+
+  if (scoreLabel) scoreLabel.textContent = "Validation Status:";
+  fraudProbText.textContent = "N/A";
+  if (secondaryLabel) secondaryLabel.textContent = "Reason:";
+  if (legitProbText) legitProbText.textContent = "Out of Range";
+
+  if (meterMin) meterMin.textContent = "Invalid Input";
+  if (meterMax) meterMax.textContent = "Rejected";
+  meterFill.style.width = "100%";
+  meterFill.className = "risk-meter-fill high";
+
+  thresholdVal.textContent = "—";
+
+  explanation.textContent = message;
+  modelName.textContent = "Input Validation Layer";
+  timestamp.textContent = new Date().toLocaleTimeString();
+}
+
 
 /**
  * Appends transaction to session history table and updates summary

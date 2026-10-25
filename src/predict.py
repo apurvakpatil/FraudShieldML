@@ -24,6 +24,8 @@ class FraudPredictor:
     Singleton wrapper for loading model artifact, validating requests,
     and producing risk-scored transaction classifications.
     """
+    MAX_REALISTIC_AMOUNT = 30000.0
+    MAX_REALISTIC_DISTANCE_KM = 20015.0
 
     def __init__(
         self,
@@ -127,6 +129,13 @@ class FraudPredictor:
             amt = float(data["amt"])
             if amt < 0:
                 return False, {}, "Transaction amount 'amt' cannot be negative."
+            if amt > self.MAX_REALISTIC_AMOUNT:
+                return False, {}, (
+                    f"Transaction amount ${amt:,.2f} exceeds the realistic maximum "
+                    f"(${self.MAX_REALISTIC_AMOUNT:,.2f}) observed in training data. "
+                    "This value is outside the model's valid operating range. "
+                    "Please verify the entered amount."
+                )
             cleaned["amt"] = amt
         except (ValueError, TypeError):
             return False, {}, f"Invalid numerical value for 'amt': {data.get('amt')}"
@@ -166,7 +175,14 @@ class FraudPredictor:
             cleaned["day_of_week"] = 2
 
         try:
-            cleaned["distance_km"] = max(0.0, float(data.get("distance_km", 25.0)))
+            distance_km = max(0.0, float(data.get("distance_km", 25.0)))
+            if distance_km > self.MAX_REALISTIC_DISTANCE_KM:
+                return False, {}, (
+                    f"Distance {distance_km:,.1f} km exceeds Earth's maximum possible "
+                    f"surface distance (~{self.MAX_REALISTIC_DISTANCE_KM:,.0f} km). "
+                    "Please verify the entered location data."
+                )
+            cleaned["distance_km"] = distance_km
         except Exception:
             cleaned["distance_km"] = 25.0
 
@@ -217,6 +233,13 @@ class FraudPredictor:
         label = "Fraudulent Transaction" if is_fraud == 1 else "Legitimate Transaction"
         risk_factors = self._extract_risk_factors(cleaned_data)
 
+        # Hybrid rule-based escalation for near-boundary high-risk values
+        # that ML alone may underweight due to limited training exposure
+        if len(risk_factors) >= 3 and risk_level == "Low Risk":
+            risk_level = "Moderate Attention"
+        elif len(risk_factors) >= 3 and risk_level == "Moderate Attention":
+            risk_level = "High Risk"
+
         if is_fraud == 1:
             explanation = "The supervised ensemble model classified this transaction as POTENTIALLY FRAUDULENT. "
             if risk_factors:
@@ -229,6 +252,7 @@ class FraudPredictor:
                 explanation += f"Note: Moderate flags detected ({', '.join(risk_factors)}), but overall score remains below decision threshold."
             else:
                 explanation += "Transaction attributes match standard legitimate consumer purchasing behavior."
+
 
         return {
             "prediction": is_fraud,
