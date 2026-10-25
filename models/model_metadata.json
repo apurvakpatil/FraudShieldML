@@ -1,0 +1,132 @@
+{
+    "model_name": "Gradient Boosting",
+    "model_version": "1.0.0",
+    "training_date": "2026-10-23 23:49:20",
+    "dataset_file": "credit_card_transactions.csv",
+    "target_column": "is_fraud",
+    "input_features": [
+        "amt",
+        "distance_km",
+        "hour",
+        "day_of_week",
+        "age",
+        "city_pop",
+        "category",
+        "gender"
+    ],
+    "numerical_features": [
+        "amt",
+        "distance_km",
+        "hour",
+        "day_of_week",
+        "age",
+        "city_pop"
+    ],
+    "categorical_features": [
+        "category",
+        "gender"
+    ],
+    "training_samples": 80000,
+    "test_samples": 20000,
+    "total_analyzed_samples": 100000,
+    "random_seed": 42,
+    "selected_threshold": 0.67,
+    "validation_metrics": [
+        {
+            "Model": "Gradient Boosting",
+            "Accuracy": 0.997,
+            "Precision": 0.7619,
+            "Recall": 0.6957,
+            "F1-Score": 0.7273,
+            "ROC-AUC": 0.9792,
+            "PR-AUC": 0.5817,
+            "Training Time (s)": 10.69
+        },
+        {
+            "Model": "Random Forest",
+            "Accuracy": 0.9952,
+            "Precision": 0.5633,
+            "Recall": 0.7739,
+            "F1-Score": 0.652,
+            "ROC-AUC": 0.9862,
+            "PR-AUC": 0.773,
+            "Training Time (s)": 0.75
+        },
+        {
+            "Model": "Soft Voting Ensemble",
+            "Accuracy": 0.9916,
+            "Precision": 0.3927,
+            "Recall": 0.8435,
+            "F1-Score": 0.5359,
+            "ROC-AUC": 0.9713,
+            "PR-AUC": 0.7943,
+            "Training Time (s)": 6.14
+        },
+        {
+            "Model": "HistGradientBoosting",
+            "Accuracy": 0.9859,
+            "Precision": 0.2745,
+            "Recall": 0.8783,
+            "F1-Score": 0.4182,
+            "ROC-AUC": 0.9848,
+            "PR-AUC": 0.7602,
+            "Training Time (s)": 2.57
+        },
+        {
+            "Model": "Extra Trees",
+            "Accuracy": 0.9732,
+            "Precision": 0.1523,
+            "Recall": 0.8,
+            "F1-Score": 0.2559,
+            "ROC-AUC": 0.9435,
+            "PR-AUC": 0.6808,
+            "Training Time (s)": 0.53
+        },
+        {
+            "Model": "Decision Tree",
+            "Accuracy": 0.9656,
+            "Precision": 0.1311,
+            "Recall": 0.887,
+            "F1-Score": 0.2284,
+            "ROC-AUC": 0.9388,
+            "PR-AUC": 0.3751,
+            "Training Time (s)": 0.21
+        },
+        {
+            "Model": "Stacking Ensemble",
+            "Accuracy": 0.9593,
+            "Precision": 0.1179,
+            "Recall": 0.9391,
+            "F1-Score": 0.2095,
+            "ROC-AUC": 0.9881,
+            "PR-AUC": 0.7887,
+            "Training Time (s)": 17.09
+        },
+        {
+            "Model": "Logistic Regression",
+            "Accuracy": 0.885,
+            "Precision": 0.0349,
+            "Recall": 0.713,
+            "F1-Score": 0.0666,
+            "ROC-AUC": 0.8914,
+            "PR-AUC": 0.1419,
+            "Training Time (s)": 0.43
+        }
+    ],
+    "test_metrics": {
+        "accuracy": 0.9968,
+        "precision": 0.7766,
+        "recall": 0.6293,
+        "f1_score": 0.6952,
+        "roc_auc": 0.9445,
+        "pr_auc": 0.5249,
+        "true_positives": 73,
+        "false_positives": 21,
+        "true_negatives": 19863,
+        "false_negatives": 43
+    },
+    "pipeline_steps": [
+        "preprocessor",
+        "classifier"
+    ]
+}

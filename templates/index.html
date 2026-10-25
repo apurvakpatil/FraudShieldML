@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Credit Card Fraud Detection using Ensemble Machine Learning. Real-time transaction risk scoring, model evaluation, and exploratory data analysis.">
+  <title>Credit Card Fraud Detection | Ensemble Machine Learning</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Custom Theme CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+    <div class="container-xl">
+      <a class="navbar-brand d-flex align-items-center gap-2 text-decoration-none" href="#dashboard">
+        <div class="bg-primary text-white rounded p-1 px-2">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <span class="fw-bold text-dark fs-5">FraudShield ML</span>
+        <span class="brand-badge ms-1">Ensemble v1.0</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navContent">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-1">
+          <li class="nav-item">
+            <a class="nav-link active" href="#dashboard"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#predict-section"><i class="fa-solid fa-magnifying-glass-dollar me-1"></i> Predict Fraud</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#performance-section"><i class="fa-solid fa-chart-line me-1"></i> Model Performance</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#eda-section"><i class="fa-solid fa-database me-1"></i> Dataset & EDA</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#about-section"><i class="fa-solid fa-circle-info me-1"></i> About Project</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Header Banner -->
+  <header class="page-header" id="dashboard">
+    <div class="container-xl">
+      <div class="row align-items-center">
+        <div class="col-lg-8">
+          <div class="d-inline-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">Machine Learning Mini-Project</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" id="system-status-badge">
+              <i class="fa-solid fa-circle-check me-1"></i> System Online
+            </span>
+          </div>
+          <h1>Credit Card Fraud Detection</h1>
+          <p>An intelligent transaction risk prediction system powered by ensemble machine learning.</p>
+        </div>
+        <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+          <a href="#predict-section" class="btn btn-primary-custom me-2">
+            <i class="fa-solid fa-bolt me-1"></i> Test a Transaction
+          </a>
+          <a href="#performance-section" class="btn btn-outline-custom">
+            <i class="fa-solid fa-chart-column me-1"></i> View Metrics
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container-xl">
+
+    <!-- Section: Dashboard KPI Metrics -->
+    <section class="mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <h2 class="h5 fw-bold mb-0">Model Evaluation Metrics</h2>
+          <small class="text-muted">Rigorous out-of-sample metrics measured on held-out 20,000 test transactions</small>
+        </div>
+        <span class="badge bg-light text-secondary border px-3 py-2">
+          <i class="fa-solid fa-microchip me-1 text-primary"></i> <span id="kpi-model-badge">Gradient Boosting</span>
+        </span>
+      </div>
+
+      <div class="row g-3">
+        <!-- KPI 1: Selected ML Model -->
+        <div class="col-md-6 col-lg">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon blue"><i class="fa-solid fa-diagram-project"></i></div>
+            <div>
+              <div class="kpi-label">Selected Model</div>
+              <div class="kpi-value fs-5" id="kpi-model-name">Gradient Boosting</div>
+              <div class="kpi-subtext">Optimized Threshold: <span id="kpi-threshold">0.67</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- KPI 2: Test Recall -->
+        <div class="col-md-6 col-lg">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon green"><i class="fa-solid fa-bullseye"></i></div>
+            <div>
+              <div class="kpi-label">Test Recall</div>
+              <div class="kpi-value" id="kpi-recall">62.93%</div>
+              <div class="kpi-subtext">Frauds Flagged (73 / 116)</div>
+            </div>
+          </div>
+        </div>
+        <!-- KPI 3: Test Precision -->
+        <div class="col-md-6 col-lg">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon indigo"><i class="fa-solid fa-filter-circle-dollar"></i></div>
+            <div>
+              <div class="kpi-label">Test Precision</div>
+              <div class="kpi-value" id="kpi-precision">77.66%</div>
+              <div class="kpi-subtext">Flag Accuracy (Only 21 FP)</div>
+            </div>
+          </div>
+        </div>
+        <!-- KPI 4: Test F1-Score -->
+        <div class="col-md-6 col-lg">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon purple"><i class="fa-solid fa-scale-balanced"></i></div>
+            <div>
+              <div class="kpi-label">Test F1-Score</div>
+              <div class="kpi-value" id="kpi-f1">0.6952</div>
+              <div class="kpi-subtext">Harmonic Mean of P & R</div>
+            </div>
+          </div>
+        </div>
+        <!-- KPI 5: Test PR-AUC -->
+        <div class="col-md-6 col-lg">
+          <div class="kpi-card h-100">
+            <div class="kpi-icon amber"><i class="fa-solid fa-chart-area"></i></div>
+            <div>
+              <div class="kpi-label">Test PR-AUC</div>
+              <div class="kpi-value" id="kpi-pr-auc">0.5249</div>
+              <div class="kpi-subtext">Precision-Recall Curve</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: Prediction & Live Inference -->
+    <section class="mb-5" id="predict-section">
+      <div class="row g-4">
+        
+        <!-- Left Column: Transaction Input Form -->
+        <div class="col-lg-7">
+          <div class="card-custom h-100">
+            <div class="card-header-custom">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-file-invoice-dollar text-primary"></i>
+                <span>Transaction Risk Screening Form</span>
+              </div>
+              <!-- Quick Load Benchmark Samples -->
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-custom dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                  <i class="fa-solid fa-flask-vial me-1"></i> Load Real Sample
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm" id="sample-dropdown-menu">
+                  <li><h6 class="dropdown-header">From Uploaded Dataset:</h6></li>
+                  <li><button class="dropdown-item" type="button" onclick="loadSampleByIndex(0)"><i class="fa-solid fa-circle-check text-success me-2"></i>Sample 1: Legit Grocery ($10.70)</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="loadSampleByIndex(1)"><i class="fa-solid fa-circle-check text-success me-2"></i>Sample 2: Legit Gas Station ($75.35)</button></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><button class="dropdown-item" type="button" onclick="loadSampleByIndex(2)"><i class="fa-solid fa-triangle-exclamation text-danger me-2"></i>Sample 3: Fraud Shopping ($982.50)</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="loadSampleByIndex(3)"><i class="fa-solid fa-triangle-exclamation text-danger me-2"></i>Sample 4: Fraud Grocery Night ($314.20)</button></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="p-4">
+              <form id="prediction-form" novalidate>
+                
+                <!-- Group 1: Transaction Characteristics -->
+                <div class="form-section-title">
+                  <i class="fa-solid fa-receipt"></i> 1. Transaction Monetary Details
+                </div>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-6">
+                    <label for="amt" class="form-label">Transaction Amount ($ USD) <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light">$</span>
+                      <input type="number" step="0.01" min="0.01" class="form-control" id="amt" name="amt" placeholder="e.g. 85.50" required value="42.50">
+                    </div>
+                    <div class="form-text">Actual dollar value of the transaction.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label for="category" class="form-label">Merchant Category <span class="text-danger">*</span></label>
+                    <select class="form-select" id="category" name="category" required>
+                      <option value="grocery_pos">Grocery POS (Store)</option>
+                      <option value="shopping_net">Shopping Net (Online)</option>
+                      <option value="misc_net">Misc Net (Online)</option>
+                      <option value="shopping_pos">Shopping POS (In-Store)</option>
+                      <option value="gas_transport">Gas & Transport</option>
+                      <option value="entertainment">Entertainment</option>
+                      <option value="food_dining">Food & Dining</option>
+                      <option value="personal_care">Personal Care</option>
+                      <option value="health_fitness">Health & Fitness</option>
+                      <option value="travel">Travel & Hospitality</option>
+                      <option value="kids_pets">Kids & Pets</option>
+                      <option value="home">Home & Garden</option>
+                      <option value="grocery_net">Grocery Net (Online Delivery)</option>
+                      <option value="misc_pos">Misc POS (Other)</option>
+                    </select>
+                    <div class="form-text">Industry classification of the merchant.</div>
+                  </div>
+                </div>
+
+                <!-- Group 2: Temporal & Spatial Risk Indicators -->
+                <div class="form-section-title">
+                  <i class="fa-solid fa-clock"></i> 2. Time & Geographic Coordinates
+                </div>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-4">
+                    <label for="hour" class="form-label">Hour of Day (0 - 23) <span class="text-danger">*</span></label>
+                    <input type="number" min="0" max="23" class="form-control" id="hour" name="hour" required value="14">
+                    <div class="form-text">24-hour format (e.g. 23 = 11 PM).</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="day_of_week" class="form-label">Day of Week <span class="text-danger">*</span></label>
+                    <select class="form-select" id="day_of_week" name="day_of_week" required>
+                      <option value="0">Monday</option>
+                      <option value="1">Tuesday</option>
+                      <option value="2" selected>Wednesday</option>
+                      <option value="3">Thursday</option>
+                      <option value="4">Friday</option>
+                      <option value="5">Saturday</option>
+                      <option value="6">Sunday</option>
+                    </select>
+                    <div class="form-text">Day transaction was placed.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="distance_km" class="form-label">Distance to Merchant (km) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.1" min="0" class="form-control" id="distance_km" name="distance_km" required value="12.4">
+                    <div class="form-text">Calculated via Haversine.</div>
+                  </div>
+                </div>
+
+                <!-- Group 3: Cardholder Demographics -->
+                <div class="form-section-title">
+                  <i class="fa-solid fa-user-shield"></i> 3. Cardholder Profile
+                </div>
+                <div class="row g-3 mb-4">
+                  <div class="col-md-4">
+                    <label for="age" class="form-label">Cardholder Age (Years) <span class="text-danger">*</span></label>
+                    <input type="number" min="18" max="100" class="form-control" id="age" name="age" required value="38">
+                  </div>
+                  <div class="col-md-4">
+                    <label for="gender" class="form-label">Cardholder Gender <span class="text-danger">*</span></label>
+                    <select class="form-select" id="gender" name="gender" required>
+                      <option value="M" selected>Male (M)</option>
+                      <option value="F">Female (F)</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="city_pop" class="form-label">Cardholder City Population <span class="text-danger">*</span></label>
+                    <input type="number" min="100" class="form-control" id="city_pop" name="city_pop" required value="45000">
+                  </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex align-items-center gap-2 pt-2 border-top">
+                  <button type="submit" class="btn btn-primary-custom" id="btn-predict">
+                    <i class="fa-solid fa-magnifying-glass me-1"></i> Analyze Transaction
+                  </button>
+                  <button type="button" class="btn btn-outline-custom" id="btn-reset">
+                    <i class="fa-solid fa-rotate-left me-1"></i> Reset Form
+                  </button>
+                  <div class="spinner-border text-primary spinner-border-sm ms-auto d-none" id="predict-spinner" role="status">
+                    <span class="visually-hidden">Analyzing...</span>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Prediction Assessment & Risk Meter -->
+        <div class="col-lg-5">
+          <div class="card-custom h-100">
+            <div class="card-header-custom">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-gauge-high text-primary"></i>
+                <span>Risk Assessment Outcome</span>
+              </div>
+              <span class="badge bg-light text-muted border" id="result-timestamp">Ready</span>
+            </div>
+
+            <div class="p-4 d-flex flex-column justify-content-between h-100">
+              
+              <!-- Result Content Wrapper -->
+              <div id="result-display-area">
+                
+                <!-- Initial Empty State -->
+                <div class="text-center py-5 text-muted" id="result-empty-state">
+                  <div class="mb-3 text-secondary" style="font-size: 3rem; opacity: 0.4;">
+                    <i class="fa-solid fa-shield-halved"></i>
+                  </div>
+                  <h3 class="h6 fw-bold">Awaiting Transaction Input</h3>
+                  <p class="small text-muted mb-0">Fill out the parameters on the left or click "Load Real Sample" to evaluate risk.</p>
+                </div>
+
+                <!-- Dynamic Prediction Card (Rendered via JS) -->
+                <div class="d-none" id="result-card">
+                  
+                  <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div id="result-status-badge" class="result-badge legit">
+                      <i class="fa-solid fa-circle-check"></i> <span>Legitimate Transaction</span>
+                    </div>
+                    <span class="badge bg-light text-dark border px-2 py-1" id="result-risk-level">Low Risk</span>
+                  </div>
+
+                  <!-- Probability Meter -->
+                  <div class="mb-3">
+                    <div class="d-flex justify-content-between small fw-bold mb-1">
+                      <span>Fraud Probability:</span>
+                      <span id="result-fraud-prob" class="text-danger">3.4%</span>
+                    </div>
+                    <div class="risk-meter">
+                      <div class="risk-meter-fill low" id="result-meter-fill" style="width: 3.4%;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between text-muted small" style="font-size: 0.72rem;">
+                      <span>0.0 (Safe)</span>
+                      <span>Threshold: <strong id="result-threshold-val">0.67</strong></span>
+                      <span>1.0 (Definite Fraud)</span>
+                    </div>
+                  </div>
+
+                  <!-- Result Interpretation Box -->
+                  <div class="p-3 bg-light rounded border mb-3">
+                    <div class="fw-bold small text-dark mb-1">
+                      <i class="fa-solid fa-circle-nodes text-primary me-1"></i> Model Rationale & Analysis:
+                    </div>
+                    <p class="small text-muted mb-0" id="result-explanation">
+                      Transaction attributes match standard consumer purchasing behavior.
+                    </p>
+                  </div>
+
+                  <!-- Model Details Metadata -->
+                  <div class="row g-2 text-muted small mb-2" style="font-size: 0.78rem;">
+                    <div class="col-6">
+                      <strong>Evaluating Model:</strong> <span id="result-model-name">Gradient Boosting</span>
+                    </div>
+                    <div class="col-6">
+                      <strong>Legitimate Score:</strong> <span id="result-legit-prob">96.6%</span>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+              <!-- Disclaimer Alert Box -->
+              <div class="disclaimer-box">
+                <i class="fa-solid fa-triangle-exclamation text-warning me-1"></i>
+                <strong>Notice:</strong> Machine learning predictions provide automated risk scoring and decision support. They do not constitute guaranteed financial or fraud certification.
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section: Session Prediction History & Summary -->
+    <section class="mb-5">
+      <div class="card-custom">
+        <div class="card-header-custom">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-primary"></i>
+            <span>Session Prediction History</span>
+          </div>
+          <div class="d-flex gap-2">
+            <span class="badge bg-light text-dark border">Analyzed: <strong id="summary-total">0</strong></span>
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Frauds Flagged: <strong id="summary-frauds">0</strong></span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle">Legit Cleared: <strong id="summary-legit">0</strong></span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-custom" id="history-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Time</th>
+                <th>Amount ($)</th>
+                <th>Category</th>
+                <th>Hour</th>
+                <th>Fraud Probability</th>
+                <th>Risk Level</th>
+                <th>Prediction Status</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr>
+                <td colspan="8" class="text-center py-4 text-muted small">No transactions evaluated in this session yet. Test a transaction above.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: Model Performance & Comparison -->
+    <section class="mb-5" id="performance-section">
+      <div class="card-custom">
+        <div class="card-header-custom">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-chart-column text-primary"></i>
+            <span>Model Comparison & Validation Benchmarks</span>
+          </div>
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+            Stratified 5-Fold / Validation Split
+          </span>
+        </div>
+
+        <div class="p-4">
+          <!-- Comparison Table -->
+          <h3 class="h6 fw-bold mb-3 text-dark">Algorithm Comparison Table (Candidate Ensembles)</h3>
+          <div class="table-responsive mb-4">
+            <table class="table table-custom table-hover" id="comparison-table">
+              <thead>
+                <tr>
+                  <th>Model Algorithm</th>
+                  <th>Recall</th>
+                  <th>Precision</th>
+                  <th>F1-Score</th>
+                  <th>PR-AUC</th>
+                  <th>ROC-AUC</th>
+                  <th>Accuracy</th>
+                  <th>Train Time (s)</th>
+                </tr>
+              </thead>
+              <tbody id="comparison-tbody">
+                <!-- Populated dynamically via app.js -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Interactive Chart.js Comparison -->
+          <div class="row g-4 mt-2">
+            <div class="col-lg-7">
+              <div class="card-custom p-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h4 class="h6 fw-bold mb-0">Validation F1-Score & PR-AUC Comparison</h4>
+                  <small class="text-muted">Higher is better</small>
+                </div>
+                <div style="height: 300px;">
+                  <canvas id="modelComparisonChart"></canvas>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-lg-5">
+              <div class="card-custom p-3 h-100">
+                <h4 class="h6 fw-bold mb-2">Why Accuracy is Misleading in Fraud Detection</h4>
+                <p class="small text-muted mb-2">
+                  Because fraud occurs in only <strong>0.58%</strong> of transactions, a naive model that predicts every single transaction is legitimate achieves <strong>99.42% accuracy</strong> while catching <strong>zero</strong> frauds.
+                </p>
+                <div class="p-2 bg-light rounded border mb-2 small">
+                  <div class="fw-bold text-dark mb-1">Key Metrics for Imbalanced Data:</div>
+                  <ul class="mb-0 ps-3 text-secondary">
+                    <li><strong>Recall:</strong> Percentage of actual frauds successfully caught.</li>
+                    <li><strong>Precision:</strong> Percentage of flagged transactions that were genuine frauds (avoiding annoying legitimate cardholders).</li>
+                    <li><strong>PR-AUC:</strong> Area under the Precision-Recall curve — the benchmark of choice for fraud systems.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Diagnostic Plots Tabs -->
+          <h3 class="h6 fw-bold mt-5 mb-3 text-dark">Diagnostic Evaluation Plots (Held-Out Test Set)</h3>
+          <ul class="nav nav-tabs nav-tabs-custom mb-3" id="plotTabs" role="tablist">
+            <li class="nav-item">
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-cm">
+                <i class="fa-solid fa-table-cells me-1"></i> Confusion Matrix
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pr">
+                <i class="fa-solid fa-chart-line me-1"></i> Precision-Recall Curve
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-roc">
+                <i class="fa-solid fa-bezier-curve me-1"></i> ROC Curve
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-fi">
+                <i class="fa-solid fa-ranking-star me-1"></i> Feature Importance
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-cm">
+              <div class="row align-items-center">
+                <div class="col-lg-6 text-center">
+                  <div class="chart-img-container">
+                    <img src="/static/images/confusion_matrix.png" alt="Confusion Matrix" class="img-fluid">
+                  </div>
+                </div>
+                <div class="col-lg-6">
+                  <h4 class="h6 fw-bold">Understanding the Confusion Matrix</h4>
+                  <p class="small text-muted">
+                    Evaluated on <strong>20,000 completely untouched test transactions</strong>:
+                  </p>
+                  <ul class="small text-secondary ps-3">
+                    <li><strong>True Positives (73):</strong> Fraudulent transactions correctly caught and flagged.</li>
+                    <li><strong>False Positives (21):</strong> Legitimate transactions incorrectly flagged (only 21 false alarms out of 19,884 genuine transactions!).</li>
+                    <li><strong>False Negatives (43):</strong> Fraudulent transactions that slipped through the threshold.</li>
+                    <li><strong>True Negatives (19,863):</strong> Legitimate transactions cleared smoothly.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-pr">
+              <div class="chart-img-container text-center">
+                <img src="/static/images/precision_recall_curve.png" alt="Precision-Recall Curve" class="img-fluid" style="max-height: 480px;">
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-roc">
+              <div class="chart-img-container text-center">
+                <img src="/static/images/roc_curve.png" alt="ROC Curve" class="img-fluid" style="max-height: 480px;">
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-fi">
+              <div class="chart-img-container text-center">
+                <img src="/static/images/feature_importance.png" alt="Feature Importance" class="img-fluid" style="max-height: 480px;">
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: Exploratory Data Analysis (EDA) Visualizations -->
+    <section class="mb-5" id="eda-section">
+      <div class="card-custom">
+        <div class="card-header-custom">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-chart-pie text-primary"></i>
+            <span>Exploratory Data Analysis (EDA) Visualizations</span>
+          </div>
+          <span class="badge bg-light text-muted border">1,296,675 Original Transactions</span>
+        </div>
+        
+        <div class="p-4">
+          <p class="small text-muted mb-4">
+            Key statistical patterns uncovered during data exploration that motivated the ensemble architecture and feature engineering:
+          </p>
+
+          <div class="row g-4">
+            <div class="col-md-6">
+              <div class="chart-img-container h-100">
+                <div class="fw-bold small mb-2 text-dark">Target Class Imbalance (~0.58% Fraud)</div>
+                <img src="/static/images/eda_class_distribution.png" alt="Class Distribution" class="img-fluid">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="chart-img-container h-100">
+                <div class="fw-bold small mb-2 text-dark">Transaction Amount Density (Log Scale)</div>
+                <img src="/static/images/eda_amount_distribution.png" alt="Amount Distribution" class="img-fluid">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="chart-img-container h-100">
+                <div class="fw-bold small mb-2 text-dark">Fraud Rate Peak at Night (22:00 - 04:00)</div>
+                <img src="/static/images/eda_fraud_by_hour.png" alt="Hourly Fraud Rate" class="img-fluid">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="chart-img-container h-100">
+                <div class="fw-bold small mb-2 text-dark">Fraud Occurrence Across Merchant Categories</div>
+                <img src="/static/images/eda_fraud_by_category.png" alt="Category Fraud Rate" class="img-fluid">
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="chart-img-container">
+                <div class="fw-bold small mb-2 text-dark">Feature Correlation Matrix</div>
+                <img src="/static/images/eda_correlation_matrix.png" alt="Correlation Matrix" class="img-fluid" style="max-height: 420px;">
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: About Project -->
+    <section class="mb-5" id="about-section">
+      <div class="card-custom p-4">
+        <h2 class="h5 fw-bold mb-3 text-dark">About This Project</h2>
+        <div class="row g-4">
+          <div class="col-md-6">
+            <h3 class="h6 fw-bold text-primary">Problem Statement</h3>
+            <p class="small text-muted">
+              Credit card fraud causes tens of billions in annual losses across global banking systems. A major challenge in automated fraud detection is the extreme rarity of fraudulent events (typically less than 1% of transactions). Standard machine learning models trained with traditional accuracy objectives struggle because predicting the majority class yields deceptively high accuracy while missing devastating fraud occurrences.
+            </p>
+            <h3 class="h6 fw-bold text-primary">Ensemble Machine Learning Approach</h3>
+            <p class="small text-muted">
+              Ensemble learning addresses class imbalance and variance by combining multiple specialized algorithms. In this project, we compared 8 diverse classifiers: Logistic Regression, Decision Tree, Random Forest, Extra Trees, Gradient Boosting, HistGradientBoosting, Soft Voting, and Stacking. Gradient Boosting and Tree Ensembles achieved superior resilience and precision.
+            </p>
+          </div>
+          <div class="col-md-6">
+            <h3 class="h6 fw-bold text-primary">Engineering & Pipeline Design</h3>
+            <ul class="small text-muted ps-3">
+              <li><strong>Zero Data Leakage:</strong> Preprocessing pipelines (imputation, robust scaling, one-hot encoding) are strictly fit on training data only.</li>
+              <li><strong>Threshold Optimization:</strong> Decision threshold was optimized on a dedicated validation split to maximize F1-score rather than assuming 0.50.</li>
+              <li><strong>Clean Production Pipeline:</strong> Feature engineering and inference are packaged into an end-to-end scikit-learn Pipeline saved via Joblib.</li>
+            </ul>
+            <div class="p-3 bg-light rounded border">
+              <h4 class="h6 fw-bold text-dark mb-1">Project Metadata</h4>
+              <div class="small text-muted">
+                <div><strong>Dataset:</strong> Credit Card Transactions (1,296,675 rows)</div>
+                <div><strong>Target:</strong> <code>is_fraud</code> (0 = Legit, 1 = Fraud)</div>
+                <div><strong>Saved Model:</strong> <code>models/fraud_detection_model.joblib</code></div>
+                <div><strong>Backend:</strong> Python / Flask 3.1</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container-xl text-center">
+      <p class="mb-1 fw-bold text-dark">Credit Card Fraud Detection Using Ensemble Machine Learning</p>
+      <p class="mb-0 text-muted small">Built with Python, scikit-learn, Flask, and Bootstrap 5. College Mini-Project Demonstration Ready.</p>
+    </div>
+  </footer>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- Custom Application Script -->
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
