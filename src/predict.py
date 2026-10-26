@@ -54,6 +54,8 @@ class FraudPredictor:
         self.metadata = {}
         self.threshold = 0.50
         self.model_name = "Gradient Boosting"
+        self.production_model = "Gradient Boosting"
+        self.production_model_key = "gradient_boosting"
 
         # Unsupervised Isolation Forest attributes
         self.iso_model = None
@@ -75,7 +77,9 @@ class FraudPredictor:
                         self.metadata = json.load(f)
                         self.threshold = self.metadata.get("selected_threshold", 0.50)
                         self.model_name = self.metadata.get("model_name", "Gradient Boosting")
-                print(f"[FraudPredictor] Successfully loaded '{self.model_name}' (threshold: {self.threshold})")
+                        self.production_model = self.metadata.get("production_model", self.model_name)
+                        self.production_model_key = self.metadata.get("production_model_key", "gradient_boosting")
+                print(f"[FraudPredictor] Successfully loaded '{self.model_name}' (threshold: {self.threshold}, production: '{self.production_model}')")
             except Exception as e:
                 print(f"[FraudPredictor] Warning: Failed to load supervised model: {e}")
                 self.model = None
@@ -258,12 +262,14 @@ class FraudPredictor:
             "prediction": is_fraud,
             "label": label,
             "score_type": "fraud_probability",
+            "score": round(fraud_prob, 4),
             "fraud_probability": round(fraud_prob, 4),
             "legit_probability": round(1.0 - fraud_prob, 4),
             "anomaly_score": None,
             "threshold": round(threshold, 2),
             "risk_level": risk_level,
             "model_name": self.model_name,
+            "selected_model": self.model_name,
             "explanation": explanation,
             "risk_factors": risk_factors,
             "cleaned_features": cleaned_data,
@@ -314,12 +320,14 @@ class FraudPredictor:
             "prediction": is_fraud,
             "label": label,
             "score_type": "anomaly_score",
+            "score": round(anomaly_score, 4),
             "anomaly_score": round(anomaly_score, 4),
             "fraud_probability": None,
             "legit_probability": None,
             "threshold": round(threshold, 4),
             "risk_level": risk_level,
             "model_name": self.iso_name,
+            "selected_model": self.iso_name,
             "explanation": explanation,
             "risk_factors": risk_factors,
             "cleaned_features": cleaned_data,
@@ -330,19 +338,21 @@ class FraudPredictor:
         self,
         feature_data: Dict[str, Any],
         custom_threshold: Optional[float] = None,
-        model_name: Optional[str] = "gradient_boosting",
+        model_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Executes prediction on input features dictionary with model selection.
-        Defaults to Gradient Boosting when model_name is omitted or None.
+        Executes prediction on input features dictionary.
+        Automatically uses the configured production model (Gradient Boosting) when model_name is omitted or None.
+        Supports explicit model_name ('gradient_boosting' or 'isolation_forest') for testing and comparison.
         """
         valid, cleaned_data, err_msg = self.validate_features(feature_data)
         if not valid:
             raise ValueError(err_msg)
 
-        # Normalize model selection
-        target_model = "gradient_boosting"
-        if model_name:
+        # Automatic model selection if not explicitly specified
+        if model_name is None or (isinstance(model_name, str) and not model_name.strip()):
+            target_model = self.production_model_key
+        else:
             norm = str(model_name).strip().lower().replace("-", "_").replace(" ", "_")
             if norm in ["isolation_forest", "isolationforest", "iso_forest", "iforest", "unsupervised"]:
                 target_model = "isolation_forest"
@@ -352,8 +362,12 @@ class FraudPredictor:
                 raise ValueError(f"Unsupported model '{model_name}'. Choose from 'gradient_boosting' or 'isolation_forest'.")
 
         if target_model == "isolation_forest":
+            if not self.is_iso_loaded:
+                raise RuntimeError("Isolation Forest model is not loaded. Train the model first.")
             return self._predict_isolation_forest(cleaned_data, custom_threshold=custom_threshold)
         else:
+            if not self.is_loaded:
+                raise RuntimeError("Fraud detection model is not loaded. Please train the model using `python -m src.train_model` first.")
             return self._predict_supervised(cleaned_data, custom_threshold=custom_threshold)
 
 

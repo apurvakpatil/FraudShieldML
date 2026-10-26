@@ -250,11 +250,7 @@ async function handlePredictionSubmit() {
     return;
   }
 
-  // Get selected model
-  const selectedModel = document.querySelector('input[name="modelSelector"]:checked')?.value || "gradient_boosting";
-
   const payload = {
-    model: selectedModel,
     amt: amt,
     category: document.getElementById("category").value,
     hour: parseInt(document.getElementById("hour").value, 10),

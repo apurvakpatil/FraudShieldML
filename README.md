@@ -249,6 +249,30 @@ All candidate models were evaluated on the same cross-validation partition (Trai
 
 ---
 
+### Automatic Production Model Selection Strategy
+
+To eliminate user burden and prevent non-technical users from having to guess between algorithmic architectures, the application employs an **internal, data-driven automatic model selection strategy**:
+
+1. **Validation-Grounded Decision Policy:**
+   * In credit card fraud detection, false alarms severely disrupt legitimate cardholders (causing card decline embarrassment and high customer service overhead).
+   * Across the identical held-out validation set (16,000 transactions, ~0.58% fraud rate):
+     * **Gradient Boosting:** Validation F1-Score: **0.7306**, Precision: **76.92%**, PR-AUC: **0.5823**, ROC-AUC: **0.9792**.
+     * **Isolation Forest:** Validation F1-Score: **0.1227**, Precision: **7.03%**, PR-AUC: **0.0683**, ROC-AUC: **0.8510**.
+   * With over **10x higher precision** and an F1-score of **0.7306 vs. 0.1227**, Gradient Boosting is the mathematically and operationally superior choice for production inference.
+   
+2. **Metadata & Persistence:**
+   * The designated production model (`"production_model": "Gradient Boosting"`) and optimal validation threshold (`0.67`) are stored in `models/model_metadata.json`.
+   * Both model artifacts (`fraud_detection_model.joblib` and `isolation_forest_model.joblib`) are loaded into memory once at Flask startup.
+   * Model selection is consistent across server restarts without ad-hoc or unvalidated heuristic routing.
+
+3. **Inference Flow:**
+   * When a prediction request arrives at `/api/predict` without a `model` parameter, the system automatically routes the transaction to the production Gradient Boosting pipeline.
+   * The response returns the risk assessment along with metadata (`"selected_model": "Gradient Boosting"`, `"score_type": "fraud_probability"`, `"score"`, `"threshold": 0.67`).
+   * The frontend displays an **Auto-Selected** badge in the risk assessment card, confirming the model without requiring user intervention.
+   * Backward compatibility is preserved: external clients and diagnostic tools can optionally provide `"model": "isolation_forest"` or `"model": "gradient_boosting"` to test and compare specific models. Unsupported model names return HTTP 400.
+
+---
+
 ## 12. Project Folder Structure
 
 ```
@@ -353,20 +377,21 @@ python src/eda.py
 
 ## 15. Running the Automated Test Suite
 
-Execute the 15 automated unit and integration tests:
+Execute the 17 automated unit and integration tests:
 
 ```bash
 python -m pytest tests/test_api.py -v
 ```
 
-All 15 tests verify:
+All 17 tests verify:
 * Dataset discovery and genuine transaction extraction
 * Model persistence and loading (both Gradient Boosting and Isolation Forest)
-* System health reporting for both models (`/api/health`)
-* Default prediction endpoint (backward-compatible Gradient Boosting inference)
+* System health reporting for both models and production model configuration (`/api/health`)
+* Automatic production model selection when the `model` parameter is omitted
+* Default prediction endpoint (Gradient Boosting inference with calibrated fraud probabilities)
 * High-risk vs. low-risk fraud scenarios
 * Input payload validation and bounds checking
-* Explicit model selection (`"model": "isolation_forest"`)
+* Backward compatibility for explicit model selection (`"model": "gradient_boosting"` and `"model": "isolation_forest"`)
 * Anomaly score calculation and score orientation (higher score = more anomalous)
 * Rejection of unsupported model names with HTTP 400
 * Model comparison endpoint (`/api/comparison`) verifying no duplicates
@@ -392,29 +417,27 @@ Open your browser and navigate to:
 ### Method A: Through the Web Interface
 1. Open `http://127.0.0.1:5000` in your web browser.
 2. Scroll to the **Transaction Risk Screening Form**.
-3. Choose the **Detection Algorithm Architecture**:
-   * **Gradient Boosting (Default):** Supervised ensemble outputting calibrated fraud probabilities.
-   * **Isolation Forest:** Unsupervised anomaly detector outputting pure outlier anomaly scores.
-4. Click the **Load Real Sample** button to choose from genuine transactions extracted from the dataset:
+3. **No manual algorithm selection is required**: The system automatically utilizes the production-validated Gradient Boosting ensemble model.
+4. Fill in transaction attributes or click the **Load Real Sample** dropdown:
    * **Sample 1 / Sample 2:** Standard legitimate transactions ($10 - $75, daytime).
    * **Sample 3 / Sample 4:** High-risk fraudulent transactions ($300 - $980, late night hours).
 5. Click **Analyze Transaction**.
 6. Observe the live risk assessment card:
    * Status badge (**Fraud / Anomaly Alert** vs **Legitimate Transaction**).
-   * Dynamic Risk Meter: Displays **Fraud Probability** (0.0 to 1.0) for Gradient Boosting or **Anomaly Score** with respect to the decision threshold (`-0.0215`) for Isolation Forest.
+   * **Evaluating Model:** Displays `Gradient Boosting` with an **Auto-Selected** badge.
+   * Dynamic Risk Meter: Displays **Fraud Probability** (0.0 to 1.0) with respect to the validation-tuned threshold (`0.67`).
    * Model rationale highlighting specific contributing risk factors and feature vectors.
-   * Real-time session history table tracking all past predictions with model identification.
+   * Real-time session history table tracking all past predictions.
 
 ### Method B: Via REST API
 
-#### 1. Default Supervised Prediction (Gradient Boosting):
-Send an HTTP POST request to `/api/predict`:
+#### 1. Standard Production Prediction (Automatic Model Selection):
+Clients do not need to provide any model name. Simply send the transaction attributes to `/api/predict`:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/api/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gradient_boosting",
     "amt": 850.00,
     "category": "shopping_net",
     "hour": 23,
@@ -433,19 +456,21 @@ curl -X POST http://127.0.0.1:5000/api/predict \
   "prediction": 1,
   "label": "Fraudulent Transaction",
   "score_type": "fraud_probability",
+  "score": 0.8845,
   "fraud_probability": 0.8845,
   "legit_probability": 0.1155,
   "anomaly_score": null,
   "threshold": 0.67,
   "risk_level": "Critical Risk",
   "model_name": "Gradient Boosting",
+  "selected_model": "Gradient Boosting",
   "explanation": "The supervised ensemble model classified this transaction as POTENTIALLY FRAUDULENT. Key contributing factors: High transaction amount ($850.00), Off-peak night hour (23:00), Elevated risk merchant category 'shopping_net', Unusual distance from cardholder location (280.0 km).",
   "disclaimer": "This prediction is generated by an ensemble machine learning model for risk screening and decision support. It is not an absolute financial guarantee."
 }
 ```
 
-#### 2. Unsupervised Anomaly Detection (Isolation Forest):
-Send an HTTP POST request with `"model": "isolation_forest"`:
+#### 2. Optional Model Override (Testing & Research Comparison):
+For testing or comparative analysis, clients may optionally pass `"model": "isolation_forest"`:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/api/predict \
@@ -454,6 +479,34 @@ curl -X POST http://127.0.0.1:5000/api/predict \
     "model": "isolation_forest",
     "amt": 980.50,
     "category": "shopping_net",
+    "hour": 2,
+    "day_of_week": 5,
+    "distance_km": 350.0,
+    "age": 45,
+    "gender": "F",
+    "city_pop": 120000
+  }'
+```
+
+**Example JSON Response:**
+```json
+{
+  "status": "success",
+  "prediction": 1,
+  "label": "Fraudulent Transaction",
+  "score_type": "anomaly_score",
+  "score": 0.0152,
+  "anomaly_score": 0.0152,
+  "fraud_probability": null,
+  "legit_probability": null,
+  "threshold": -0.0215,
+  "risk_level": "Critical Risk",
+  "model_name": "Isolation Forest",
+  "selected_model": "Isolation Forest",
+  "explanation": "The unsupervised Isolation Forest model flagged this transaction as ANOMALOUS (Score: 0.0152 >= Threshold: -0.0215). The transaction exhibits feature isolation characteristics atypical of legitimate behavior. Notable risk flags: High transaction amount ($980.50), Off-peak night hour (2:00), Elevated risk merchant category 'shopping_net', Unusual distance from cardholder location (350.0 km).",
+  "disclaimer": "This prediction is generated by an unsupervised Isolation Forest model for outlier risk screening. It is not an absolute financial guarantee."
+}
+```
     "hour": 2,
     "day_of_week": 5,
     "distance_km": 350.0,

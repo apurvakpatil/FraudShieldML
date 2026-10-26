@@ -39,6 +39,8 @@ def health_check():
         "status": "ok",
         "model_loaded": predictor.is_loaded,
         "model_name": predictor.model_name,
+        "production_model": predictor.production_model,
+        "model_selection_strategy": predictor.metadata.get("model_selection_strategy", "validation_f1_and_prauc_optimization"),
         "threshold": predictor.threshold,
         "isolation_forest_loaded": predictor.is_iso_loaded,
         "isolation_forest_threshold": predictor.iso_threshold,
@@ -51,8 +53,9 @@ def health_check():
 def predict_transaction():
     """
     Fraud Prediction Endpoint.
-    Validates payload, executes pipeline inference, and returns risk assessment.
-    Supports model selection: 'gradient_boosting' (default) or 'isolation_forest'.
+    Validates payload, automatically selects the production model internally,
+    executes pipeline inference, and returns risk assessment.
+    Optional model parameter ('gradient_boosting' or 'isolation_forest') supported for backward compatibility.
     """
     try:
         payload = request.get_json(force=True, silent=False)
@@ -63,38 +66,44 @@ def predict_transaction():
             }), 400
 
         # Support both {"features": {...}, "model": "..."} and flat payload {...}
+        model_choice = None
         if "features" in payload and isinstance(payload["features"], dict):
             features = payload["features"]
-            model_choice = payload.get("model", payload.get("model_name", "gradient_boosting"))
+            model_choice = payload.get("model", payload.get("model_name", None))
         else:
-            model_choice = payload.get("model", payload.get("model_name", "gradient_boosting"))
+            model_choice = payload.get("model", payload.get("model_name", None))
             features = {k: v for k, v in payload.items() if k not in ["model", "model_name"]}
 
-        # Normalize and validate model choice early
-        norm_model = str(model_choice).strip().lower().replace("-", "_").replace(" ", "_")
-        if norm_model in ["isolation_forest", "isolationforest", "iso_forest", "iforest", "unsupervised"]:
-            target_model = "isolation_forest"
-        elif norm_model in ["gradient_boosting", "gradientboosting", "gb", "supervised", "ensemble", "ensemble_model"]:
-            target_model = "gradient_boosting"
-        else:
-            return jsonify({
-                "status": "error",
-                "message": f"Unsupported model '{model_choice}'. Choose from 'gradient_boosting' or 'isolation_forest'."
-            }), 400
+        # If model is explicitly provided, validate it; otherwise use automatic internal selection
+        target_model = None
+        if model_choice is not None and str(model_choice).strip() != "":
+            norm_model = str(model_choice).strip().lower().replace("-", "_").replace(" ", "_")
+            if norm_model in ["isolation_forest", "isolationforest", "iso_forest", "iforest", "unsupervised"]:
+                target_model = "isolation_forest"
+            elif norm_model in ["gradient_boosting", "gradientboosting", "gb", "supervised", "ensemble", "ensemble_model"]:
+                target_model = "gradient_boosting"
+            else:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Unsupported model '{model_choice}'. Choose from 'gradient_boosting' or 'isolation_forest'."
+                }), 400
 
         predictor = get_predictor()
-        if target_model == "isolation_forest" and not predictor.is_iso_loaded:
+
+        # Check required model readiness before executing inference
+        effective_model = target_model if target_model is not None else predictor.production_model_key
+        if effective_model == "isolation_forest" and not predictor.is_iso_loaded:
             return jsonify({
                 "status": "error",
                 "message": "Isolation Forest model is not loaded. Train the model first."
             }), 503
-        elif target_model == "gradient_boosting" and not predictor.is_loaded:
+        elif effective_model == "gradient_boosting" and not predictor.is_loaded:
             return jsonify({
                 "status": "error",
                 "message": "Fraud detection model is not loaded. Train the model first."
             }), 503
 
-        # Execute prediction
+        # Execute prediction with automatic selection (or optional explicit override)
         result = predictor.predict(features, model_name=target_model)
         return jsonify({
             "status": "success",

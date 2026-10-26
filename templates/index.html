@@ -187,33 +187,6 @@
             <div class="p-4">
               <form id="prediction-form" novalidate>
                 
-                <!-- Model Architecture Selector -->
-                <div class="mb-4 p-3 bg-light rounded border">
-                  <label class="form-label fw-bold text-dark d-flex align-items-center gap-2 mb-2">
-                    <i class="fa-solid fa-brain text-primary"></i> Detection Algorithm Architecture
-                  </label>
-                  <div class="row g-2">
-                    <div class="col-md-6">
-                      <div class="form-check p-2 border rounded bg-white h-100">
-                        <input class="form-check-input ms-1 me-2" type="radio" name="modelSelector" id="model-gb" value="gradient_boosting" checked>
-                        <label class="form-check-label w-100 cursor-pointer" for="model-gb">
-                          <strong class="d-block text-dark">Gradient Boosting <span class="badge bg-primary text-white" style="font-size: 0.65rem;">Supervised Default</span></strong>
-                          <span class="text-muted small">Supervised Ensemble &bull; Calibrated Fraud Probability</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="col-md-6">
-                      <div class="form-check p-2 border rounded bg-white h-100">
-                        <input class="form-check-input ms-1 me-2" type="radio" name="modelSelector" id="model-if" value="isolation_forest">
-                        <label class="form-check-label w-100 cursor-pointer" for="model-if">
-                          <strong class="d-block text-dark">Isolation Forest <span class="badge bg-secondary text-white" style="font-size: 0.65rem;">Unsupervised</span></strong>
-                          <span class="text-muted small">Anomaly Detection &bull; Pure Inlier Trained Score</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 <!-- Group 1: Transaction Characteristics -->
                 <div class="form-section-title">
                   <i class="fa-solid fa-receipt"></i> 1. Transaction Monetary Details
@@ -382,7 +355,7 @@
                   <!-- Model Details Metadata -->
                   <div class="row g-2 text-muted small mb-2" style="font-size: 0.78rem;">
                     <div class="col-6">
-                      <strong>Evaluating Model:</strong> <span id="result-model-name">Gradient Boosting</span>
+                      <strong>Evaluating Model:</strong> <span id="result-model-name">Gradient Boosting</span> <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" style="font-size: 0.65rem;">Auto-Selected</span>
                     </div>
                     <div class="col-6" id="result-legit-col">
                       <strong id="result-secondary-label">Legitimate Score:</strong> <span id="result-legit-prob">96.6%</span>
@@ -654,7 +627,7 @@
             </p>
             <h3 class="h6 fw-bold text-primary">Ensemble Machine Learning Approach</h3>
             <p class="small text-muted">
-              Ensemble learning addresses class imbalance and variance by combining multiple specialized algorithms. In this project, we compared 8 diverse classifiers: Logistic Regression, Decision Tree, Random Forest, Extra Trees, Gradient Boosting, HistGradientBoosting, Soft Voting, and Stacking. Gradient Boosting and Tree Ensembles achieved superior resilience and precision.
+              Ensemble learning addresses class imbalance and variance by combining multiple specialized algorithms. In this project, we compared 8 diverse classifiers: Gradient Boosting and Isolation Forest. 
             </p>
           </div>
           <div class="col-md-6">

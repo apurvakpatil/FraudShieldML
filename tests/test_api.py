@@ -57,10 +57,12 @@ def test_health_endpoint(client):
     data = response.get_json()
     assert data["status"] == "ok"
     assert data["model_loaded"] is True
+    assert data["production_model"] == "Gradient Boosting"
+    assert "model_selection_strategy" in data
 
 
 def test_prediction_legitimate(client):
-    """Tests POST /api/predict with standard low-risk transaction."""
+    """Tests POST /api/predict with standard low-risk transaction (automatic model selection)."""
     payload = {
         "amt": 25.50,
         "category": "grocery_pos",
@@ -77,6 +79,10 @@ def test_prediction_legitimate(client):
     assert data["status"] == "success"
     assert "prediction" in data
     assert "fraud_probability" in data
+    assert "score" in data
+    assert data["score"] == data["fraud_probability"]
+    assert data["model_name"] == "Gradient Boosting"
+    assert data["selected_model"] == "Gradient Boosting"
     assert "threshold" in data
     assert 0.0 <= data["fraud_probability"] <= 1.0
     assert data["prediction"] in [0, 1]
@@ -175,6 +181,55 @@ def test_prediction_isolation_forest(client):
     assert "threshold" in data
     assert data["prediction"] in [0, 1]
     assert data["label"] in ["Fraudulent Transaction", "Legitimate Transaction"]
+    assert "score" in data
+    assert data["selected_model"] == "Isolation Forest"
+
+
+def test_prediction_auto_model_selection(client):
+    """Verifies that omitted model parameter automatically routes to Gradient Boosting production model."""
+    payload = {
+        "amt": 150.00,
+        "category": "misc_net",
+        "hour": 20,
+        "day_of_week": 3,
+        "distance_km": 15.0,
+        "age": 29,
+        "gender": "F",
+        "city_pop": 75000
+    }
+    # Notice: 'model' key is omitted completely
+    response = client.post("/api/predict", json=payload)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert data["model_name"] == "Gradient Boosting"
+    assert data["selected_model"] == "Gradient Boosting"
+    assert data["score_type"] == "fraud_probability"
+    assert data["threshold"] == 0.67
+    assert "score" in data
+    assert data["score"] == data["fraud_probability"]
+
+
+def test_prediction_backward_compatibility_explicit_gb(client):
+    """Verifies backward compatibility when 'model': 'gradient_boosting' is explicitly supplied."""
+    payload = {
+        "model": "gradient_boosting",
+        "amt": 85.00,
+        "category": "gas_transport",
+        "hour": 11,
+        "day_of_week": 1,
+        "distance_km": 8.0,
+        "age": 52,
+        "gender": "M",
+        "city_pop": 25000
+    }
+    response = client.post("/api/predict", json=payload)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["status"] == "success"
+    assert data["model_name"] == "Gradient Boosting"
+    assert data["selected_model"] == "Gradient Boosting"
+    assert data["score_type"] == "fraud_probability"
 
 
 def test_prediction_invalid_model_choice(client):

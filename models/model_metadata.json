@@ -31,6 +31,10 @@
     "total_analyzed_samples": 100000,
     "random_seed": 42,
     "selected_threshold": 0.67,
+    "production_model": "Gradient Boosting",
+    "production_model_key": "gradient_boosting",
+    "model_selection_strategy": "validation_f1_and_prauc_optimization",
+    "model_selection_rationale": "Empirical evaluation on held-out validation data demonstrates that Gradient Boosting achieves superior performance (Validation F1: 0.7306, PR-AUC: 0.5823, Precision: 76.92% vs Isolation Forest F1: 0.1227, PR-AUC: 0.0683, Precision: 7.03%) under extreme class imbalance (0.58% fraud). Gradient Boosting is configured as the production model for all incoming inference requests.",
     "validation_metrics": [
         {
             "Model": "Gradient Boosting",
